@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Beltraide Dashboard</title>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!-- React + ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Recharts + deps (d3-shape) -->
+    <script src="https://unpkg.com/d3-shape@3"></script>
+    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+
+    <script>
+      const { createElement: h, useState } = React;
+      const { createRoot } = ReactDOM;
+      const { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } = Recharts;
+
+      function Chart() {
+        const data = [
+          { name: "A", value: 4000 },
+          { name: "B", value: 3000 },
+          { name: "C", value: 2000 },
+        ];
+        return h(
+          BarChart,
+          { width: 600, height: 320, data },
+          h(CartesianGrid, { strokeDasharray: "3 3" }),
+          h(XAxis, { dataKey: "name" }),
+          h(YAxis, null),
+          h(Tooltip, null),
+          h(Bar, { dataKey: "value" })
+        );
+      }
+
+      function App() {
+        return h("div", { style: { padding: 24 } },
+          h("h1", null, "Beltraide Dashboard"),
+          h(Chart, null)
+        );
+      }
+
+      const root = createRoot(document.getElementById("root"));
+      root.render(h(App));
+    </script>
+  </body>
+</html>
