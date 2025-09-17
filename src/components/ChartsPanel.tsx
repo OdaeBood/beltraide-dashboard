@@ -15,14 +15,17 @@ import {
   Legend,
 } from "recharts";
 
-const COLORS = ["#F9C74F", "#90BE6D", "#43AA8B", "#577590", "#F8961E", "#F3722C", "#277DA1"];
+const COLORS = [
+  "#F9C74F",
+  "#90BE6D",
+  "#43AA8B",
+  "#577590",
+  "#F8961E",
+  "#F3722C",
+  "#277DA1",
+];
 
-type Props = {
-  coops: Cooperative[];
-};
-
-export default function ChartsPanel({ coops }: Props) {
-  // --- derived datasets ------------------------------------------------------
+export default function ChartsPanel({ coops }: { coops: Cooperative[] }) {
   const bySector = useMemo(() => {
     const map = new Map<string, number>();
     coops.forEach((c) => map.set(c.sector, (map.get(c.sector) || 0) + 1));
@@ -31,23 +34,23 @@ export default function ChartsPanel({ coops }: Props) {
 
   const byValueChain = useMemo(() => {
     const map = new Map<string, number>();
-    coops.forEach((c) => map.set(c.valueChain, (map.get(c.valueChain) || 0) + 1));
+    coops.forEach((c) =>
+      map.set(c.valueChain, (map.get(c.valueChain) || 0) + 1)
+    );
     return Array.from(map, ([name, count]) => ({ name, count }));
   }, [coops]);
 
   const capacityByDistrict = useMemo(() => {
     const map = new Map<string, number>();
-    coops.forEach((c) => map.set(c.district, (map.get(c.district) || 0) + c.capacity));
+    coops.forEach((c) =>
+      map.set(c.district, (map.get(c.district) || 0) + c.capacity)
+    );
     return Array.from(map, ([name, capacity]) => ({ name, capacity }));
   }, [coops]);
 
-  // --- common styles (dark) --------------------------------------------------
-  const axisStyle = { fontSize: 12, fill: "#A3A3A3" };
-  const gridStroke = "#1E1E1E";
-
   return (
     <div className="grid grid-cols-12 gap-6">
-      {/* Co-ops by Sector (Bar) */}
+      {/* Co-ops by Sector */}
       <Card className="col-span-12 md:col-span-6">
         <CardHeader>
           <CardTitle>Co-ops by Sector</CardTitle>
@@ -55,20 +58,20 @@ export default function ChartsPanel({ coops }: Props) {
         <CardContent className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={bySector}>
-              <XAxis dataKey="name" tick={axisStyle} axisLine={false} tickLine={false} />
-              <YAxis allowDecimals={false} tick={axisStyle} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{ background: "#111", border: "1px solid #262626", color: "#fff" }}
-                cursor={{ fill: "rgba(255,255,255,0.04)" }}
-              />
-              {/* default single color; Recharts will apply this to all bars */}
-              <Bar dataKey="count" />
+              <XAxis dataKey="name" />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Bar dataKey="count">
+                {bySector.map((_, i) => (
+                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
 
-      {/* Value Chain Mix (Pie) */}
+      {/* Value Chain Mix */}
       <Card className="col-span-12 md:col-span-6">
         <CardHeader>
           <CardTitle>Value Chain Mix</CardTitle>
@@ -80,28 +83,20 @@ export default function ChartsPanel({ coops }: Props) {
                 data={byValueChain}
                 dataKey="count"
                 nameKey="name"
-                outerRadius={90}
-                stroke="#0d0d0d"
+                outerRadius={88}
               >
                 {byValueChain.map((_, i) => (
-                  <Cell key={`vc-${i}`} />
+                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Pie>
-              <Legend
-                wrapperStyle={{ color: "#A3A3A3" }}
-                iconType="circle"
-                verticalAlign="bottom"
-                height={24}
-              />
-              <Tooltip
-                contentStyle={{ background: "#111", border: "1px solid #262626", color: "#fff" }}
-              />
+              <Legend />
+              <Tooltip />
             </PieChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
 
-      {/* Total Capacity by District (Bar) */}
+      {/* Capacity by District */}
       <Card className="col-span-12">
         <CardHeader>
           <CardTitle>Total Capacity by District</CardTitle>
@@ -109,14 +104,14 @@ export default function ChartsPanel({ coops }: Props) {
         <CardContent className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={capacityByDistrict}>
-              <XAxis dataKey="name" tick={axisStyle} axisLine={false} tickLine={false} />
-              <YAxis tick={axisStyle} axisLine={false} tickLine={false} />
-              <Tooltip
-                formatter={(v: number) => [v, "capacity"]}
-                contentStyle={{ background: "#111", border: "1px solid #262626", color: "#fff" }}
-                cursor={{ fill: "rgba(255,255,255,0.04)" }}
-              />
-              <Bar dataKey="capacity" />
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="capacity">
+                {capacityByDistrict.map((_, i) => (
+                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
