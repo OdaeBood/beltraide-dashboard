@@ -1,119 +1,111 @@
 // src/components/EcosystemGraph.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D, { ForceGraphMethods } from "react-force-graph-2d";
-import { Cooperative } from "../data/coops";
 import { Card, CardHeader, CardTitle, CardContent } from "../lib/ui";
+import { type Cooperative } from "../data/coops";
 
-/**
- * Props:
- * - coops: list already filtered by the UI
- * - onCoopSelect: click a coop node -> open details
- * - onSectorSelect: click a "Sector: X" hub -> set sector filter + show Snapshot
- * - onFdiSelect: click a "FDI: Y" hub -> set FDI filter + show Snapshot
- * - onGraphReady?: optional hook after the graph mounts
- */
+type NodeType = "coop" | "hub-sector" | "hub-fdi" | "hub-district";
+type Node = { id: string; type: NodeType; label?: string };
+type Link = { source: string; target: string };
+
+export interface EcosystemGraphProps {
+  coops: Cooperative[];
+  onCoopSelect: (id: string) => void;
+  onSectorSelect: (sector: string) => void;
+  onFdiSelect: (priority: string) => void;
+  title?: string;
+}
+
+const COLORS = {
+  bg: "#0d0d0d",
+  text: "#e5e7eb",
+  muted: "#9ca3af",
+  hubSector: "#F9C74F",
+  hubFdi: "#FFD166",
+  hubDistrict: "#F9844A",
+  coop: "#9CA3AF",
+  link: "#3a3a3a",
+};
+
+function buildGraph(coops: Cooperative[]): { nodes: Node[]; links: Link[] } {
+  const sectorHubs = Array.from(new Set(coops.map((c) => c.sector))).map<Node>(
+    (s) => ({ id: `sector:${s}`, type: "hub-sector", label: s })
+  );
+  const fdiHubs = Array.from(new Set(coops.map((c) => c.fdiPriority))).map<Node>(
+    (p) => ({ id: `fdi:${p}`, type: "hub-fdi", label: p })
+  );
+  const districtHubs = Array.from(
+    new Set(coops.map((c) => c.district))
+  ).map<Node>((d) => ({ id: `district:${d}`, type: "hub-district", label: d }));
+
+  const coopNodes: Node[] = coops.map((c) => ({
+    id: c.id,
+    type: "coop",
+    label: c.cooperativeName,
+  }));
+
+  const links: Link[] = [];
+  coops.forEach((c) => {
+    links.push({ source: c.id, target: `sector:${c.sector}` });
+    links.push({ source: c.id, target: `fdi:${c.fdiPriority}` });
+    links.push({ source: c.id, target: `district:${c.district}` });
+  });
+
+  return {
+    nodes: [...sectorHubs, ...fdiHubs, ...districtHubs, ...coopNodes],
+    links,
+  };
+}
+
 export default function EcosystemGraph({
   coops,
   onCoopSelect,
   onSectorSelect,
   onFdiSelect,
-  onGraphReady,
   title = "Ecosystem Graph",
-}: {
-  coops: Cooperative[];
-  onCoopSelect: (id: string) => void;
-  onSectorSelect: (sector: string) => void;
-  onFdiSelect: (priority: string) => void;
-  onGraphReady?: () => void;
-  title?: string;
-}) {
-  // Build hubs + links
-  const graphData = useMemo(() => {
-    const hubsDistrict = Array.from(new Set(coops.map(c => c.district))).map(d => ({
-      id: `District: ${d}`,
-      type: "hub-district",
-      label: d,
-    }));
-    const hubsSector = Array.from(new Set(coops.map(c => c.sector))).map(s => ({
-      id: `Sector: ${s}`,
-      type: "hub-sector",
-      label: s,
-    }));
-    const hubsFdi = Array.from(new Set(coops.map(c => c.fdiPriority))).map(f => ({
-      id: `FDI: ${f}`,
-      type: "hub-fdi",
-      label: f,
-    }));
-
-    const nodes = [
-      ...hubsDistrict,
-      ...hubsSector,
-      ...hubsFdi,
-      ...coops.map(c => ({ id: c.id, type: "coop", label: c.cooperativeName })),
-    ];
-
-    const links: Array<{ source: string; target: string }> = [];
-    coops.forEach(c => {
-      links.push({ source: c.id, target: `District: ${c.district}` });
-      links.push({ source: c.id, target: `Sector: ${c.sector}` });
-      links.push({ source: c.id, target: `FDI: ${c.fdiPriority}` });
-    });
-
-    return { nodes, links };
-  }, [coops]);
-
-  // Interactivity + initial zoomToFit
+}: EcosystemGraphProps) {
+  const { nodes, links } = useMemo(() => buildGraph(coops), [coops]);
   const fgRef = useRef<ForceGraphMethods>();
-  const [graphHeight, setGraphHeight] = useState(360);
-  const [needsFit, setNeedsFit] = useState(true);
+  const didFitRef = useRef(false);
 
-  // Ensure we SEE nodes on first open (no “empty dark canvas”)
-  // 1) briefly wait for canvas paint, 2) zoomToFit, 3) allow interactions
-  useEffect(() => {
-    let t1: number | undefined;
-    let t2: number | undefined;
+  // Graph height + resize handle
+  const [height, setHeight] = useState(420);
+  const MIN_H = 280;
+  const MAX_H = 1200;
 
-    // Give the layout a head start
-    t1 = window.setTimeout(() => {
-      try {
-        fgRef.current?.zoomToFit(300, 40);
-      } catch {}
-      // A second pass after a frame to be extra safe
-      t2 = window.setTimeout(() => {
-        try {
-          fgRef.current?.zoomToFit(300, 40);
-        } catch {}
-        setNeedsFit(false);
-        onGraphReady?.();
-      }, 100);
-    }, 150);
-
-    return () => {
-      if (t1) clearTimeout(t1);
-      if (t2) clearTimeout(t2);
-    };
-  }, [graphData.nodes.length, graphData.links.length, onGraphReady]);
-
-  // Drag-to-resize handle
-  const startResize = (e: React.MouseEvent) => {
+  const onResizeDrag = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     const startY = e.clientY;
-    const startH = graphHeight;
+    const startH = height;
+
     const onMove = (ev: MouseEvent) => {
-      const next = Math.min(1200, Math.max(260, startH + (ev.clientY - startY)));
-      setGraphHeight(next);
+      const next = Math.min(MAX_H, Math.max(MIN_H, startH + (ev.clientY - startY)));
+      setHeight(next);
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
-      // fit again after resize so the view remains nice
+      // fit after resize for a nice view
       try {
-        fgRef.current?.zoomToFit(250, 40);
+        fgRef.current?.zoomToFit(300, 40);
       } catch {}
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   };
+
+  // Make sure the graph is visible immediately (no blank area)
+  useEffect(() => {
+    didFitRef.current = false; // re-fit when data length changes
+    // Try a scheduled fit shortly after mount/layout
+    const t = setTimeout(() => {
+      try {
+        fgRef.current?.zoomToFit(400, 40);
+        didFitRef.current = true;
+      } catch {}
+    }, 100);
+    return () => clearTimeout(t);
+  }, [nodes.length, links.length]);
 
   return (
     <Card>
@@ -122,79 +114,102 @@ export default function EcosystemGraph({
       </CardHeader>
 
       <CardContent className="relative p-0">
-        <div style={{ height: graphHeight }}>
-          <ForceGraph2D
-            ref={fgRef as any}
-            graphData={graphData as any}
-            // keep interactions ON
-            enableZoomPanInteraction
-            enablePointerInteraction
-            nodeRelSize={6}
-            cooldownTicks={needsFit ? 30 : undefined}
-            onEngineStop={() => {
-              // final safety net to fit once after engine cools
-              if (needsFit) {
-                try {
-                  fgRef.current?.zoomToFit(300, 40);
-                } catch {}
-                setNeedsFit(false);
-              }
-            }}
-            onNodeClick={(n: any) => {
-              if (n.type === "coop") onCoopSelect(String(n.id));
-              else if (n.type === "hub-sector") {
-                const sector = String(n.id).replace(/^Sector:\s*/, "");
-                onSectorSelect(sector);
-              } else if (n.type === "hub-fdi") {
-                const p = String(n.id).replace(/^FDI:\s*/, "");
-                onFdiSelect(p);
-              }
-            }}
-            linkColor={() => "#3a3a3a"}
-            nodeCanvasObject={(node: any, ctx, globalScale) => {
-              const isHub = node.type?.startsWith("hub");
-              const r = isHub ? 10 : 5;
+        <ForceGraph2D
+          ref={fgRef as any}
+          height={height}
+          graphData={{ nodes, links } as any}
+          backgroundColor={COLORS.bg}
+          enableZoomPanInteraction
+          enablePointerInteraction
+          enableNodeDrag
+          // If the engine stops before our setTimeout fit runs, fit here once.
+          onEngineStop={() => {
+            if (!didFitRef.current) {
+              try {
+                fgRef.current?.zoomToFit(400, 40);
+                didFitRef.current = true;
+              } catch {}
+            }
+          }}
+          linkColor={() => COLORS.link}
+          nodeRelSize={6}
+          onNodeClick={(n: any) => {
+            const id: string = n.id;
+            const t: NodeType = n.type;
 
-              // dot
-              ctx.beginPath();
-              ctx.arc(node.x, node.y, r, 0, 2 * Math.PI, false);
-              let fill = "#ffffff";
-              if (node.type === "hub-district") fill = "#F9844A"; // orange
-              if (node.type === "hub-sector") fill = "#F9C74F";   // gold
-              if (node.type === "hub-fdi") fill = "#FFD166";      // soft
-              ctx.fillStyle = fill;
-              ctx.fill();
+            if (t === "coop") {
+              onCoopSelect(id);
+              return;
+            }
+            if (t === "hub-sector") {
+              const sector = String(id).replace(/^sector:/, "");
+              onSectorSelect(sector);
+              return;
+            }
+            if (t === "hub-fdi") {
+              const fdi = String(id).replace(/^fdi:/, "");
+              onFdiSelect(fdi);
+              return;
+            }
+            // district hub clicks are no-ops for filtering right now
+          }}
+          nodeCanvasObject={(node: any, ctx, globalScale) => {
+            const type: NodeType = node.type;
+            const isHub = type !== "coop";
+            const r = isHub ? 9 : 5;
 
-              // label
-              const label = node.label || String(node.id).replace(/^.*?:\s*/, "");
-              const fontSize = (isHub ? 4 : 3) + 3 / Math.sqrt(globalScale);
-              ctx.font = `${fontSize}px sans-serif`;
-              ctx.textAlign = "left";
-              ctx.textBaseline = "middle";
-              ctx.fillStyle = isHub ? "#e5e5e5" : "#a1a1aa";
-              ctx.fillText(label, node.x + r + 3, node.y);
-            }}
-          />
-        </div>
+            // choose fill
+            let fill = COLORS.coop;
+            if (type === "hub-sector") fill = COLORS.hubSector;
+            else if (type === "hub-fdi") fill = COLORS.hubFdi;
+            else if (type === "hub-district") fill = COLORS.hubDistrict;
 
-        {/* resize handle */}
-        <button
-          type="button"
-          onMouseDown={startResize}
+            // draw circle
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, r, 0, 2 * Math.PI, false);
+            ctx.fillStyle = fill;
+            ctx.fill();
+
+            // label
+            const label: string =
+              isHub ? (node.label ?? String(node.id)) : node.label ?? "";
+            if (!label) return;
+
+            const fs = isHub ? 12 / globalScale : 11 / globalScale;
+            ctx.font = `${fs}px sans-serif`;
+            ctx.textAlign = "left";
+            ctx.textBaseline = "middle";
+            ctx.fillStyle = isHub ? COLORS.text : COLORS.muted;
+            ctx.fillText(label, node.x + r + 4, node.y);
+          }}
+        />
+
+        {/* Resize handle */}
+        <div
           title="Drag to resize"
-          aria-label="Resize graph"
+          onMouseDown={onResizeDrag}
           className="absolute bottom-2 right-2 w-6 h-6 flex items-center justify-center rounded-md cursor-nwse-resize select-none"
-          style={{ background: "transparent", color: "#9ca3af", border: "1px solid transparent" }}
+          style={{ color: "#9ca3af" }}
         >
-          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-            <g stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
-              <path d="M6 6 L2 2" /><path d="M2 5 L2 2 L5 2" />
-              <path d="M10 6 L14 2" /><path d="M11 2 L14 2 L14 5" />
-              <path d="M6 10 L2 14" /><path d="M2 11 L2 14 L5 14" />
-              <path d="M10 10 L14 14" /><path d="M11 14 L14 14 L14 11" />
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <g
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            >
+              <path d="M6 6 L2 2" />
+              <path d="M2 5 L2 2 L5 2" />
+              <path d="M10 6 L14 2" />
+              <path d="M11 2 L14 2 L14 5" />
+              <path d="M6 10 L2 14" />
+              <path d="M2 11 L2 14 L5 14" />
+              <path d="M10 10 L14 14" />
+              <path d="M11 14 L14 14 L14 11" />
             </g>
           </svg>
-        </button>
+        </div>
       </CardContent>
     </Card>
   );
