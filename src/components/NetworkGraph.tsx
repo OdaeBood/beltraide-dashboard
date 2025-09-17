@@ -1,120 +1,152 @@
-// src/components/NetworkGraph.tsx
-import React, { useMemo, useRef, useEffect } from "react";
-import ForceGraph2D, { ForceGraphMethods } from "react-force-graph-2d";
-import { Cooperative } from "../data/coops";
-import { Card, CardHeader, CardTitle, CardContent } from "../lib/ui";
+// src/App.tsx
+import React, { useMemo, useRef, useState } from "react";
 
-type Node = { id: string; type: "coop" | "buyer" | "sector" | "fdi"; name: string };
-type Link = { source: string; target: string };
+import { Card, CardContent, CardHeader, CardTitle, Button, Badge } from "./lib/ui";
+import ChartsPanel from "./components/ChartsPanel";
+import CoopTable from "./components/CoopTable";
+import FiltersPanel from "./components/FiltersPanel";
+import CoopDetails from "./components/CoopDetails";
+import EcosystemGraph from "./components/EcosystemGraph"; // 👈 use this one!
 
-function buildGraph(coops: Cooperative[]): { nodes: Node[]; links: Link[] } {
-  const nodes: Node[] = [];
-  const links: Link[] = [];
-  const seen = new Set<string>();
+import {
+  COOPS,
+  BLUE_SECTORS,
+  Cooperative,
+  filterCoops,
+  defaultCoopFilters,
+  type CoopFilters,
+  exportCSV,
+} from "./data/coops";
 
-  coops.forEach((c) => {
-    if (!seen.has(c.id)) {
-      nodes.push({ id: c.id, type: "coop", name: c.cooperativeName });
-      seen.add(c.id);
-    }
-    // Buyer node
-    const buyerId = `buyer:${c.buyer}`;
-    if (!seen.has(buyerId)) {
-      nodes.push({ id: buyerId, type: "buyer", name: c.buyer });
-      seen.add(buyerId);
-    }
-    links.push({ source: c.id, target: buyerId });
+/* ────────────────────────────────────────────── */
+/* Top Bar with new title                         */
+/* ────────────────────────────────────────────── */
+const TopBar: React.FC<{ total: number; onExport: () => void }> = ({ total, onExport }) => (
+  <div
+    className="flex items-center justify-between p-3 rounded-2xl border"
+    style={{ borderColor: "#262626", background: "#111" }}
+  >
+    <div className="flex items-center gap-2">
+      <div className="text-white font-semibold">
+        🌊 LunaMaps-BELTRAIDE “Blue Economy” Ecosystem
+      </div>
+      <Badge className="bg-[#F9C74F] text-black">{total} results</Badge>
+    </div>
+    <div className="flex items-center gap-2">
+      <Button variant="secondary" onClick={onExport}>
+        Export CSV
+      </Button>
+    </div>
+  </div>
+);
 
-    // Sector hub
-    const sectorId = `sector:${c.sector}`;
-    if (!seen.has(sectorId)) {
-      nodes.push({ id: sectorId, type: "sector", name: c.sector });
-      seen.add(sectorId);
-    }
-    links.push({ source: c.id, target: sectorId });
+/* ────────────────────────────────────────────── */
+/* Main App                                       */
+/* ────────────────────────────────────────────── */
+export default function App() {
+  const [filters, setFilters] = useState<CoopFilters>(defaultCoopFilters());
+  const [selectedId, setSelectedId] = useState<string | undefined>();
 
-    // FDI hub
-    const fdiId = `fdi:${c.fdiPriority}`;
-    if (!seen.has(fdiId)) {
-      nodes.push({ id: fdiId, type: "fdi", name: c.fdiPriority });
-      seen.add(fdiId);
-    }
-    links.push({ source: c.id, target: fdiId });
-  });
+  const base = useMemo(() => COOPS.filter((c) => BLUE_SECTORS.includes(c.sector)), []);
+  const buyers = useMemo(() => Array.from(new Set(base.map((c) => c.buyer))).sort(), [base]);
 
-  return { nodes, links };
-}
+  const filtered = useMemo(() => filterCoops(base, filters), [base, filters]);
+  const selected = useMemo(() => COOPS.find((c) => c.id === selectedId), [selectedId]);
 
-export default function NetworkGraph({
-  coops,
-  onSelect,
-  onSectorSelect,
-  onFDISelect,
-}: {
-  coops: Cooperative[];
-  onSelect?: (id: string) => void;
-  onSectorSelect?: (sector: string) => void;
-  onFDISelect?: (priority: string) => void;
-}) {
-  const { nodes, links } = useMemo(() => buildGraph(coops), [coops]);
-  const ref = useRef<ForceGraphMethods>();
+  const tableRef = useRef<HTMLDivElement | null>(null);
+  const snapshotRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    // zoom to fit when data changes
-    if (ref.current) {
-      try {
-        ref.current.zoomToFit(400, 50);
-      } catch (e) {
-        console.warn("ZoomToFit failed", e);
-      }
-    }
-  }, [nodes.length, links.length]);
+  const scrollToSnapshot = () =>
+    setTimeout(() => snapshotRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  const scrollToTable = () =>
+    setTimeout(() => tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>🕸️ Ecosystem Graph</CardTitle>
-      </CardHeader>
-      <CardContent className="h-[420px]">
-        <ForceGraph2D
-          ref={ref as any}
-          graphData={{ nodes, links }}
-          nodeLabel={(n: any) => n.name}
-          onNodeClick={(node: any) => {
-            if (node.type === "coop" && onSelect) {
-              onSelect(node.id);
-            }
-            if (node.type === "sector" && onSectorSelect) {
-              onSectorSelect(node.name);
-            }
-            if (node.type === "fdi" && onFDISelect) {
-              onFDISelect(node.name);
-            }
-          }}
-          nodeCanvasObject={(node: any, ctx, globalScale) => {
-            const size =
-              node.type === "buyer" ? 6 : node.type === "sector" ? 8 : node.type === "fdi" ? 10 : 4;
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, size, 0, 2 * Math.PI, false);
+    <main className="min-h-screen p-4 md:p-6">
+      <TopBar total={filtered.length} onExport={() => exportCSV(filtered)} />
 
-            // color by type
-            if (node.type === "coop") ctx.fillStyle = "#9CA3AF";
-            if (node.type === "buyer") ctx.fillStyle = "#F9C74F";
-            if (node.type === "sector") ctx.fillStyle = "#F9844A";
-            if (node.type === "fdi") ctx.fillStyle = "#90BE6D";
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 mt-5">
+        {/* Filters */}
+        <div className="xl:col-span-3">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">🧰 All Filters</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FiltersPanel filters={filters} setFilters={setFilters} allBuyers={buyers} />
+            </CardContent>
+          </Card>
+        </div>
 
-            ctx.fill();
+        {/* Ecosystem + Charts + Table */}
+        <div className="xl:col-span-6 space-y-5">
+          <EcosystemGraph
+            data={filtered}
+            onSelect={(id) => {
+              setSelectedId(id);
+              scrollToTable();
+            }}
+            onSectorSelect={(sector) => {
+              setSelectedId(undefined);
+              setFilters((f) => ({ ...f, sector }));
+              scrollToSnapshot();
+            }}
+            onFDISelect={(priority) => {
+              setSelectedId(undefined);
+              setFilters((f) => ({ ...f, fdiPriority: priority }));
+              scrollToSnapshot();
+            }}
+          />
 
-            // label
-            const label = node.name as string;
-            const fontSize = 12 / globalScale;
-            ctx.font = `${fontSize}px sans-serif`;
-            ctx.fillStyle = "#FFFFFF";
-            ctx.fillText(label, node.x + size + 2, node.y + size);
-          }}
-          linkColor={() => "#444"}
-        />
-      </CardContent>
-    </Card>
+          <ChartsPanel coops={filtered} />
+
+          <div ref={tableRef}>
+            <Card>
+              <CardHeader>
+                <CardTitle>Cooperatives ({filtered.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CoopTable data={filtered} onSelect={setSelectedId} />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Snapshot + Details */}
+        <div className="xl:col-span-3 space-y-5">
+          <div ref={snapshotRef}>
+            <Card>
+              <CardHeader>
+                <CardTitle>Snapshot</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-zinc-300 space-y-1">
+                <div>Total co-ops: <b>{filtered.length}</b></div>
+                <div>Total members: <b>{filtered.reduce((a, c) => a + c.members, 0)}</b></div>
+                <div>Total capacity: <b>{filtered.reduce((a, c) => a + c.capacity, 0)}</b></div>
+                {(filters.sector || filters.fdiPriority) && (
+                  <div className="pt-2 text-xs">
+                    {filters.sector && <div>Sector filter: <b>{filters.sector}</b></div>}
+                    {filters.fdiPriority && <div>FDI filter: <b>{filters.fdiPriority}</b></div>}
+                    <div className="pt-1">
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          setSelectedId(undefined);
+                          setFilters((f) => ({ ...defaultCoopFilters(), q: f.q }));
+                        }}
+                      >
+                        Clear filters
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <CoopDetails coop={selected} onClose={() => setSelectedId(undefined)} />
+        </div>
+      </div>
+    </main>
   );
 }
