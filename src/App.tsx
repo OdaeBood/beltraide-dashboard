@@ -10,7 +10,6 @@ import EcosystemGraph from "./components/EcosystemGraph";
 
 import {
   COOPS,
-  type Cooperative,
   filterCoops,
   defaultCoopFilters,
   type CoopFilters,
@@ -18,12 +17,9 @@ import {
 } from "./data/coops";
 
 export default function App() {
-  // filters and selection
   const [filters, setFilters] = useState<CoopFilters>(defaultCoopFilters());
   const [selectedId, setSelectedId] = useState<string | undefined>();
-  const [showSnapshot, setShowSnapshot] = useState<boolean>(false);
 
-  // derived data
   const buyers = useMemo(
     () => Array.from(new Set(COOPS.map((c) => c.buyer))).sort(),
     []
@@ -36,15 +32,10 @@ export default function App() {
 
   // graph → table/details interactions
   const handleCoopSelect = (id: string) => setSelectedId(id);
-
-  const handleSectorFromGraph = (sector: string) => {
+  const handleSectorFromGraph = (sector: string) =>
     setFilters((f) => ({ ...f, sector }));
-    setShowSnapshot(true);
-  };
-  const handleFdiFromGraph = (priority: string) => {
+  const handleFdiFromGraph = (priority: string) =>
     setFilters((f) => ({ ...f, fdiPriority: priority }));
-    setShowSnapshot(true);
-  };
 
   return (
     <main className="min-h-screen p-6">
@@ -73,12 +64,7 @@ export default function App() {
             <CardContent>
               <FiltersPanel
                 filters={filters}
-                setFilters={(f) => {
-                  setFilters(f);
-                  // if user manually changes filters, keep snapshot visible only
-                  // when a focused filter is active
-                  if (!f.sector && !f.fdiPriority) setShowSnapshot(false);
-                }}
+                setFilters={(f) => setFilters(f)}
                 allBuyers={buyers}
               />
             </CardContent>
@@ -97,7 +83,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Ecosystem graph + Snapshot + Metrics */}
+      {/* Ecosystem graph + Snapshot */}
       <div className="grid grid-cols-12 gap-6 mb-6">
         <div className="col-span-12 lg:col-span-8">
           <EcosystemGraph
@@ -120,12 +106,10 @@ export default function App() {
                   Total co-ops: <b>{filtered.length}</b>
                 </div>
                 <div>
-                  Total members:{" "}
-                  <b>{filtered.reduce((a, c) => a + c.members, 0)}</b>
+                  Total members: <b>{filtered.reduce((a, c) => a + c.members, 0)}</b>
                 </div>
                 <div>
-                  Total capacity:{" "}
-                  <b>{filtered.reduce((a, c) => a + c.capacity, 0)}</b>
+                  Total capacity: <b>{filtered.reduce((a, c) => a + c.capacity, 0)}</b>
                 </div>
 
                 {(filters.sector || filters.fdiPriority) && (
@@ -143,14 +127,13 @@ export default function App() {
                     <div className="pt-1">
                       <Button
                         variant="ghost"
-                        onClick={() => {
+                        onClick={() =>
                           setFilters((f) => ({
                             ...f,
                             sector: undefined,
                             fdiPriority: undefined,
-                          }));
-                          setShowSnapshot(false);
-                        }}
+                          }))
+                        }
                       >
                         Clear focus
                       </Button>
@@ -159,9 +142,6 @@ export default function App() {
                 )}
               </CardContent>
             </Card>
-
-            {/* Optional: auto-open Snapshot when graph set a focus */}
-            {showSnapshot ? null : null}
           </div>
         </div>
       </div>
@@ -174,10 +154,7 @@ export default function App() {
       </div>
 
       {/* Details drawer */}
-      <CoopDetails
-        coop={selected}
-        onClose={() => setSelectedId(undefined)}
-      />
+      <CoopDetails coop={selected} onClose={() => setSelectedId(undefined)} />
     </main>
   );
 }
