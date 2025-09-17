@@ -2,11 +2,11 @@
 import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, Button } from "./lib/ui";
 
-import EcosystemGraph from "./components/EcosystemGraph";
 import ChartsPanel from "./components/ChartsPanel";
 import CoopTable from "./components/CoopTable";
 import FiltersPanel from "./components/FiltersPanel";
 import CoopDetails from "./components/CoopDetails";
+import EcosystemGraph from "./components/EcosystemGraph";
 
 import {
   COOPS,
@@ -21,33 +21,28 @@ export default function App() {
   const [filters, setFilters] = useState<CoopFilters>(defaultCoopFilters());
   const [selectedId, setSelectedId] = useState<string | undefined>();
 
-  // Options for filter dropdowns
   const buyers = useMemo(
     () => Array.from(new Set(COOPS.map((c) => c.buyer))).sort(),
     []
   );
 
-  // Derived data
   const filtered = useMemo(() => filterCoops(COOPS, filters), [filters]);
-  const selected = useMemo<Cooperative | undefined>(
+  const selected = useMemo(
     () => COOPS.find((c) => c.id === selectedId),
     [selectedId]
   );
 
-  // === Ecosystem graph callbacks ===
-  const handleCoopClick = (id: string) => setSelectedId(id);
+  const handleSelect = (id: string) => setSelectedId(id);
 
-  const handleSectorClick = (sector: string) => {
-    // Clear details and set sector filter so Snapshot panel highlights it
-    setSelectedId(undefined);
-    setFilters((prev) => ({ ...prev, sector }));
-  };
+  // EcosystemGraph callbacks -> update filters & show snapshot
+  const handleSectorSelect = (sector: string) =>
+    setFilters((f) => ({ ...f, sector }));
+  const handleFdiSelect = (fdiPriority: string) =>
+    setFilters((f) => ({ ...f, fdiPriority }));
 
-  const handleFdiClick = (priority: string) => {
-    // Clear details and set FDI filter so Snapshot panel highlights it
-    setSelectedId(undefined);
-    setFilters((prev) => ({ ...prev, fdiPriority: priority }));
-  };
+  const clearSector = () => setFilters((f) => ({ ...f, sector: undefined }));
+  const clearFdi = () =>
+    setFilters((f) => ({ ...f, fdiPriority: undefined }));
 
   return (
     <main className="min-h-screen p-6">
@@ -66,9 +61,10 @@ export default function App() {
         </div>
       </div>
 
-      {/* Filters + Table */}
-      <div className="grid grid-cols-12 gap-6 mb-6">
-        <div className="col-span-12 md:col-span-4">
+      {/* Main grid */}
+      <div className="grid grid-cols-12 gap-6">
+        {/* Left: Filters */}
+        <div className="col-span-12 lg:col-span-3">
           <Card>
             <CardHeader>
               <CardTitle>Filters</CardTitle>
@@ -83,43 +79,66 @@ export default function App() {
           </Card>
         </div>
 
-        <div className="col-span-12 md:col-span-8">
+        {/* Center: Graph + Charts + Table */}
+        <div className="col-span-12 lg:col-span-6 space-y-6">
+          {/* Ecosystem Graph */}
+          <EcosystemGraph
+            coops={filtered}
+            onCoopSelect={setSelectedId}
+            onSectorSelect={handleSectorSelect}
+            onFdiSelect={handleFdiSelect}
+            title="Ecosystem Graph"
+          />
+
+          {/* Charts */}
+          <ChartsPanel coops={filtered} />
+
+          {/* Table */}
           <Card>
             <CardHeader>
               <CardTitle>Cooperatives ({filtered.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              <CoopTable data={filtered} onSelect={setSelectedId} />
+              <CoopTable data={filtered} onSelect={handleSelect} />
             </CardContent>
           </Card>
         </div>
-      </div>
 
-      {/* Graph + Charts + Snapshot/Details */}
-      <div className="grid grid-cols-12 gap-6">
-        <div className="col-span-12 lg:col-span-8">
-          <EcosystemGraph
-            coops={filtered}
-            onCoopSelect={handleCoopClick}
-            onSectorSelect={handleSectorClick}
-            onFdiSelect={handleFdiClick}
-            title="Ecosystem Graph"
-          />
-
-          <div className="mt-6">
-            <ChartsPanel coops={filtered} />
-          </div>
-        </div>
-
-        <div className="col-span-12 lg:col-span-4">
+        {/* Right: Snapshot */}
+        <div className="col-span-12 lg:col-span-3">
           <Card>
             <CardHeader>
               <CardTitle>Snapshot</CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-zinc-300 space-y-1">
-              <div>
-                Total co-ops: <b>{filtered.length}</b>
+            <CardContent className="text-sm text-zinc-300 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {filters.sector && (
+                  <span className="inline-flex items-center gap-2 rounded-md border border-zinc-700 px-2 py-1">
+                    Sector: <b>{filters.sector}</b>
+                    <button
+                      className="text-zinc-400 hover:text-white"
+                      onClick={clearSector}
+                      title="Clear sector"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )}
+                {filters.fdiPriority && (
+                  <span className="inline-flex items-center gap-2 rounded-md border border-zinc-700 px-2 py-1">
+                    FDI: <b>{filters.fdiPriority}</b>
+                    <button
+                      className="text-zinc-400 hover:text-white"
+                      onClick={clearFdi}
+                      title="Clear FDI"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )}
               </div>
+
+              <div>Total co-ops: <b>{filtered.length}</b></div>
               <div>
                 Total members:{" "}
                 <b>{filtered.reduce((a, c) => a + c.members, 0)}</b>
@@ -128,27 +147,13 @@ export default function App() {
                 Total capacity:{" "}
                 <b>{filtered.reduce((a, c) => a + c.capacity, 0)}</b>
               </div>
-              {filters.sector && (
-                <div>
-                  Sector filter: <b>{filters.sector}</b>
-                </div>
-              )}
-              {filters.fdiPriority && (
-                <div>
-                  FDI filter: <b>{filters.fdiPriority}</b>
-                </div>
-              )}
             </CardContent>
           </Card>
-
-          <div className="mt-6">
-            <CoopDetails
-              coop={selected}
-              onClose={() => setSelectedId(undefined)}
-            />
-          </div>
         </div>
       </div>
+
+      {/* Details overlay */}
+      <CoopDetails coop={selected} onClose={() => setSelectedId(undefined)} />
     </main>
   );
 }
