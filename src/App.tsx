@@ -445,9 +445,9 @@ const CoopTable: React.FC<{ data: Cooperative[]; onSelect: (id: string) => void 
           onClick={() => onSelect(c.id)}
         >
           <div className="font-medium text-white">{c.cooperativeName}</div>
-// ⬇️ If your file starts with a bunch of imports (recharts, react-force-graph-2d, etc.)
-// paste ALL of that code ABOVE this component, and make sure you still export default App.
-
+           </div>
+  ))}
+</div>
 export default function App() {
   // Minimal shell so the page renders even before you wire everything else.
   return (
