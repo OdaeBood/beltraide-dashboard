@@ -1,165 +1,152 @@
 // src/App.tsx
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle, Button } from "./lib/ui";
 
-import { Card, CardContent, CardHeader, CardTitle, Button, Badge } from "./lib/ui";
+import EcosystemGraph from "./components/EcosystemGraph";
 import ChartsPanel from "./components/ChartsPanel";
 import CoopTable from "./components/CoopTable";
 import FiltersPanel from "./components/FiltersPanel";
 import CoopDetails from "./components/CoopDetails";
-import NetworkGraph from "./components/NetworkGraph";
 
 import {
   COOPS,
-  BLUE_SECTORS,
-  Cooperative,
+  type Cooperative,
   filterCoops,
   defaultCoopFilters,
   type CoopFilters,
   exportCSV,
 } from "./data/coops";
 
-/* ──────────────────────────────────────────────────────────────────────────── */
-/* Top bar with new title                                                      */
-/* ──────────────────────────────────────────────────────────────────────────── */
-const TopBar: React.FC<{ total: number; onExport: () => void }> = ({ total, onExport }) => (
-  <div
-    className="flex items-center justify-between p-3 rounded-2xl border"
-    style={{ borderColor: "#262626", background: "#111" }}
-  >
-    <div className="flex items-center gap-2">
-      <div className="text-white font-semibold">
-        🌊 LunaMaps-BELTRAIDE “Blue Economy” Ecosystem
-      </div>
-      <Badge className="bg-[#F9C74F] text-black">{total} results</Badge>
-    </div>
-    <div className="flex items-center gap-2">
-      <Button variant="secondary" onClick={onExport}>
-        Export CSV
-      </Button>
-    </div>
-  </div>
-);
-
-/* ──────────────────────────────────────────────────────────────────────────── */
-/* App                                                                         */
-/* ──────────────────────────────────────────────────────────────────────────── */
 export default function App() {
   const [filters, setFilters] = useState<CoopFilters>(defaultCoopFilters());
   const [selectedId, setSelectedId] = useState<string | undefined>();
 
-  // Only include BLUE ECONOMY sectors in the base dataset (no cacao/honey, etc.)
-  const base = useMemo(() => COOPS.filter((c) => BLUE_SECTORS.includes(c.sector)), []);
-  const buyers = useMemo(() => Array.from(new Set(base.map((c) => c.buyer))).sort(), [base]);
+  // Options for filter dropdowns
+  const buyers = useMemo(
+    () => Array.from(new Set(COOPS.map((c) => c.buyer))).sort(),
+    []
+  );
 
-  const filtered = useMemo(() => filterCoops(base, filters), [base, filters]);
-  const selected = useMemo(() => COOPS.find((c) => c.id === selectedId), [selectedId]);
+  // Derived data
+  const filtered = useMemo(() => filterCoops(COOPS, filters), [filters]);
+  const selected = useMemo<Cooperative | undefined>(
+    () => COOPS.find((c) => c.id === selectedId),
+    [selectedId]
+  );
 
-  const tableRef = useRef<HTMLDivElement | null>(null);
-  const snapshotRef = useRef<HTMLDivElement | null>(null);
+  // === Ecosystem graph callbacks ===
+  const handleCoopClick = (id: string) => setSelectedId(id);
 
-  const scrollToSnapshot = () =>
-    setTimeout(() => snapshotRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
-  const scrollToTable = () =>
-    setTimeout(() => tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  const handleSectorClick = (sector: string) => {
+    // Clear details and set sector filter so Snapshot panel highlights it
+    setSelectedId(undefined);
+    setFilters((prev) => ({ ...prev, sector }));
+  };
+
+  const handleFdiClick = (priority: string) => {
+    // Clear details and set FDI filter so Snapshot panel highlights it
+    setSelectedId(undefined);
+    setFilters((prev) => ({ ...prev, fdiPriority: priority }));
+  };
 
   return (
-    <main className="min-h-screen p-4 md:p-6">
-      <TopBar total={filtered.length} onExport={() => exportCSV(filtered)} />
+    <main className="min-h-screen p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-2xl font-semibold">
+            LunaMaps-BELTRAIDE “Blue Economy” Ecosystem
+          </h1>
+          <p className="text-zinc-400">GitHub Pages build via Actions</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => exportCSV(filtered)}>
+            Export CSV
+          </Button>
+        </div>
+      </div>
 
-      {/* Layout: Filters (left) • Ecosystem+Charts+Table (center) • Snapshot/Details (right) */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 mt-5">
-        {/* Left column: Filters */}
-        <div className="xl:col-span-3">
+      {/* Filters + Table */}
+      <div className="grid grid-cols-12 gap-6 mb-6">
+        <div className="col-span-12 md:col-span-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">🧰 All Filters</CardTitle>
+              <CardTitle>Filters</CardTitle>
             </CardHeader>
             <CardContent>
-              <FiltersPanel filters={filters} setFilters={setFilters} allBuyers={buyers} />
+              <FiltersPanel
+                filters={filters}
+                setFilters={setFilters}
+                allBuyers={buyers}
+              />
             </CardContent>
           </Card>
         </div>
 
-        {/* Center column: Ecosystem Graph → Charts → Table */}
-        <div className="xl:col-span-6 space-y-5">
-          <NetworkGraph
+        <div className="col-span-12 md:col-span-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Cooperatives ({filtered.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CoopTable data={filtered} onSelect={setSelectedId} />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Graph + Charts + Snapshot/Details */}
+      <div className="grid grid-cols-12 gap-6">
+        <div className="col-span-12 lg:col-span-8">
+          <EcosystemGraph
             coops={filtered}
-            // clicking a coop opens details (center → right)
-            onSelect={(id) => {
-              setSelectedId(id);
-              scrollToTable();
-            }}
-            // clicking a Sector hub filters by sector and opens Snapshot
-            onSectorSelect={(sector) => {
-              setSelectedId(undefined); // ensure Snapshot shows, not details
-              setFilters((f) => ({ ...f, sector }));
-              scrollToSnapshot();
-            }}
-            // clicking an FDI hub filters by FDI and opens Snapshot
-            onFDISelect={(priority) => {
-              setSelectedId(undefined); // ensure Snapshot shows, not details
-              setFilters((f) => ({ ...f, fdiPriority: priority }));
-              scrollToSnapshot();
-            }}
+            onCoopSelect={handleCoopClick}
+            onSectorSelect={handleSectorClick}
+            onFdiSelect={handleFdiClick}
+            title="Ecosystem Graph"
           />
 
-          <ChartsPanel coops={filtered} />
-
-          <div ref={tableRef}>
-            <Card>
-              <CardHeader>
-                <CardTitle>Cooperatives ({filtered.length})</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CoopTable data={filtered} onSelect={(id) => setSelectedId(id)} />
-              </CardContent>
-            </Card>
+          <div className="mt-6">
+            <ChartsPanel coops={filtered} />
           </div>
         </div>
 
-        {/* Right column: Snapshot + Details (Snapshot shows by default when no coop is selected) */}
-        <div className="xl:col-span-3 space-y-5">
-          <div ref={snapshotRef}>
-            <Card>
-              <CardHeader>
-                <CardTitle>Snapshot</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-zinc-300 space-y-1">
+        <div className="col-span-12 lg:col-span-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Snapshot</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-zinc-300 space-y-1">
+              <div>
+                Total co-ops: <b>{filtered.length}</b>
+              </div>
+              <div>
+                Total members:{" "}
+                <b>{filtered.reduce((a, c) => a + c.members, 0)}</b>
+              </div>
+              <div>
+                Total capacity:{" "}
+                <b>{filtered.reduce((a, c) => a + c.capacity, 0)}</b>
+              </div>
+              {filters.sector && (
                 <div>
-                  Total co-ops: <b>{filtered.length}</b>
+                  Sector filter: <b>{filters.sector}</b>
                 </div>
+              )}
+              {filters.fdiPriority && (
                 <div>
-                  Total members: <b>{filtered.reduce((a, c) => a + c.members, 0)}</b>
+                  FDI filter: <b>{filters.fdiPriority}</b>
                 </div>
-                <div>
-                  Total capacity: <b>{filtered.reduce((a, c) => a + c.capacity, 0)}</b>
-                </div>
-                {(filters.sector || filters.fdiPriority) && (
-                  <div className="pt-2 text-xs">
-                    {filters.sector && (
-                      <div className="opacity-80">Sector filter: <b>{filters.sector}</b></div>
-                    )}
-                    {filters.fdiPriority && (
-                      <div className="opacity-80">FDI filter: <b>{filters.fdiPriority}</b></div>
-                    )}
-                    <div className="pt-1">
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          setSelectedId(undefined);
-                          setFilters((f) => ({ ...defaultCoopFilters(), q: f.q }));
-                        }}
-                      >
-                        Clear filters
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+              )}
+            </CardContent>
+          </Card>
 
-          <CoopDetails coop={selected} onClose={() => setSelectedId(undefined)} />
+          <div className="mt-6">
+            <CoopDetails
+              coop={selected}
+              onClose={() => setSelectedId(undefined)}
+            />
+          </div>
         </div>
       </div>
     </main>
