@@ -4,7 +4,7 @@ import ForceGraph2D, { ForceGraphMethods } from "react-force-graph-2d";
 import { Card, CardContent, CardHeader, CardTitle } from "../lib/ui";
 import type { Cooperative } from "../data/coops";
 
-// Palette (matches the rest of the UI)
+// Palette
 const LUNA = {
   gold: "#F9C74F",
   orange: "#F9844A",
@@ -49,7 +49,7 @@ function buildGraph(coops: Cooperative[]) {
   return { nodes, links };
 }
 
-export default function NetworkGraph({
+export default function EcosystemGraph({
   coops,
   onCoopSelect,
   onSectorSelect,
@@ -67,10 +67,9 @@ export default function NetworkGraph({
   const [height, setHeight] = useState(380);
   const [shouldFit, setShouldFit] = useState(true);
 
-  // Ensure we see nodes immediately on first load and when data changes
+  // Fit graph to screen on load
   useEffect(() => {
     setShouldFit(true);
-    // Small delay lets layout settle so zoomToFit actually frames nodes
     const t = setTimeout(() => {
       try {
         fgRef.current?.zoomToFit(400, 40);
@@ -79,7 +78,6 @@ export default function NetworkGraph({
     return () => clearTimeout(t);
   }, [coops.length]);
 
-  // Also fit once the engine stops on first render
   const handleEngineStop = () => {
     if (!shouldFit) return;
     try {
@@ -88,7 +86,7 @@ export default function NetworkGraph({
     setShouldFit(false);
   };
 
-  // Drag-to-resize handle (bottom-right)
+  // Resize handle (drag bottom-right corner)
   const startDragResize = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     const startY = e.clientY;
@@ -123,7 +121,6 @@ export default function NetworkGraph({
             enablePointerInteraction
             nodeRelSize={6}
             linkColor={() => "#3a3a3a"}
-            // clicking nodes → filters or details
             onNodeClick={(n: any) => {
               if (n.type === "coop") onCoopSelect(n.id as string);
               else if (n.type === "hub-sector") {
