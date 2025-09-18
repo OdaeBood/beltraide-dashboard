@@ -19,17 +19,15 @@ import {
 } from "./data/coops";
 
 export default function App() {
-  // Scope the entire app to Blue Economy (no cacao/honey globally)
+  // Work only with Blue Economy sectors across the whole app
   const BASE: Cooperative[] = useMemo(
-    () => COOPS.filter(c => BLUE_SECTORS.includes(c.sector)),
+    () => COOPS.filter((c) => BLUE_SECTORS.includes(c.sector)),
     []
   );
 
-  // filters and selection
   const [filters, setFilters] = useState<CoopFilters>(defaultCoopFilters());
   const [selectedId, setSelectedId] = useState<string | undefined>();
 
-  // derived data (from BASE only)
   const buyers = useMemo(
     () => Array.from(new Set(BASE.map((c) => c.buyer))).sort(),
     [BASE]
@@ -40,21 +38,16 @@ export default function App() {
     [BASE, selectedId]
   );
 
-  // graph → table/details interactions
   const handleCoopSelect = (id: string) => setSelectedId(id);
-
   const handleSectorFromGraph = (sector: string) => {
     setFilters((f) => ({ ...f, sector }));
-    // keep details closed when focusing by sector
     setSelectedId(undefined);
   };
   const handleFdiFromGraph = (priority: string) => {
     setFilters((f) => ({ ...f, fdiPriority: priority }));
-    // keep details closed when focusing by FDI
     setSelectedId(undefined);
   };
 
-  // counts for Snapshot (from filtered)
   const totalMembers = useMemo(
     () => filtered.reduce((a, c) => a + c.members, 0),
     [filtered]
@@ -64,7 +57,7 @@ export default function App() {
     [filtered]
   );
   const uniqueBuyersCount = useMemo(
-    () => new Set(filtered.map(c => c.buyer)).size,
+    () => new Set(filtered.map((c) => c.buyer)).size,
     [filtered]
   );
 
@@ -85,9 +78,10 @@ export default function App() {
         </div>
       </div>
 
-      {/* Row 1: Filters + Table */}
+      {/* Row 1: Filters (left) • Ecosystem Graph (center) • Snapshot (right) */}
       <div className="grid grid-cols-12 gap-6 mb-6">
-        <div className="col-span-12 md:col-span-4">
+        {/* Filters */}
+        <div className="col-span-12 lg:col-span-3">
           <Card>
             <CardHeader>
               <CardTitle>Filters</CardTitle>
@@ -97,7 +91,6 @@ export default function App() {
                 filters={filters}
                 setFilters={(f) => {
                   setFilters(f);
-                  // Clear selection when filters change to avoid stale details
                   setSelectedId(undefined);
                 }}
                 allBuyers={buyers}
@@ -106,21 +99,8 @@ export default function App() {
           </Card>
         </div>
 
-        <div className="col-span-12 md:col-span-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Cooperatives ({filtered.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CoopTable data={filtered} onSelect={setSelectedId} />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Row 2: Graph (left) + Snapshot (right) — back to the placement you liked */}
-      <div className="grid grid-cols-12 gap-6 mb-6">
-        <div className="col-span-12 lg:col-span-8">
+        {/* Ecosystem Graph (center) */}
+        <div className="col-span-12 lg:col-span-6">
           <EcosystemGraph
             coops={filtered}
             onCoopSelect={handleCoopSelect}
@@ -130,8 +110,9 @@ export default function App() {
           />
         </div>
 
-        <div className="col-span-12 lg:col-span-4">
-          <div className="sticky top-6 space-y-6">
+        {/* Snapshot (right) */}
+        <div className="col-span-12 lg:col-span-3">
+          <div className="sticky top-6">
             <Card>
               <CardHeader>
                 <CardTitle>Snapshot</CardTitle>
@@ -172,18 +153,25 @@ export default function App() {
         </div>
       </div>
 
+      {/* Row 2: Table */}
+      <div className="mb-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Cooperatives ({filtered.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CoopTable data={filtered} onSelect={setSelectedId} />
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Row 3: Charts */}
-      <div className="grid grid-cols-12 gap-6">
-        <div className="col-span-12">
-          <ChartsPanel coops={filtered} />
-        </div>
+      <div>
+        <ChartsPanel coops={filtered} />
       </div>
 
       {/* Details drawer */}
-      <CoopDetails
-        coop={selected}
-        onClose={() => setSelectedId(undefined)}
-      />
+      <CoopDetails coop={selected} onClose={() => setSelectedId(undefined)} />
     </main>
   );
 }
