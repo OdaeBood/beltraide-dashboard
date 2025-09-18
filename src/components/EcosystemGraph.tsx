@@ -4,36 +4,40 @@ import ForceGraph2D, { ForceGraphMethods } from "react-force-graph-2d";
 import { Card, CardContent, CardHeader, CardTitle, Button } from "../lib/ui";
 import type { Cooperative } from "../data/coops";
 
-// Palette aligned with the rest of the UI
 const LUNA = {
   gold: "#F9C74F",      // sector hubs
   orange: "#F9844A",    // district hubs
   soft: "#FFD166",      // FDI hubs
-  buyer: "#60A5FA",     // buyer nodes (blue-ish)
-  country: "#38BDF8",   // country hubs (sky blue)
-  labelBg: "rgba(17,17,17,0.7)",
-  labelText: "#e5e5e5",
-  labelTextDim: "#a1a1aa",
+  buyer: "#60A5FA",     // buyer nodes
+  country: "#38BDF8",   // country hubs
+  labelBg: "rgba(17,17,17,0.45)",
+  labelBgHover: "rgba(17,17,17,0.85)",
+  labelText: "rgba(229,229,229,0.7)",
+  labelTextHover: "rgba(255,255,255,1)",
+  labelTextDim: "rgba(161,161,170,0.6)",
 };
 
-type NodeType = "coop" | "hub-sector" | "hub-fdi" | "hub-district" | "buyer" | "hub-country";
+type NodeType =
+  | "coop"
+  | "hub-sector"
+  | "hub-fdi"
+  | "hub-district"
+  | "buyer"
+  | "hub-country";
+
 type Node = {
   id: string;
   type: NodeType;
   label?: string;
   color?: string;
-  fx?: number;
-  fy?: number;
-  x?: number;
-  y?: number;
   __country?: string;
-  __lw?: number; // label width cache (for pointer area)
-  __lh?: number; // label height cache
+  x?: number; y?: number; fx?: number; fy?: number;
+  __bbox?: { x: number; y: number; w: number; h: number }; // for hit testing
 };
 
 type Link = { source: string; target: string };
 
-// Map buyers to country groups (not GPS)
+// Map buyers to country (no GPS)
 const BUYER_COUNTRY: Record<string, string> = {
   "Belize Sea Co.": "Belize",
   "Blue Foods Ltd.": "Mexico",
@@ -43,57 +47,57 @@ const BUYER_COUNTRY: Record<string, string> = {
   "BelSea Export": "Belize",
   "MarSea Intl": "USA",
   "Green Journeys": "Belize",
-  // Extra buyers (dummy, different countries)
+  // Dummy buyers outside Belize
   "BlueWave Capital": "USA",
   "CaribEco Partners": "Jamaica",
 };
 
-function getBuyerCountry(buyer: string) {
+function buyerCountry(buyer: string) {
   return BUYER_COUNTRY[buyer] || "Belize";
 }
 
 function buildGraph(coops: Cooperative[]) {
-  const hubsDistrict: Node[] = Array.from(new Set(coops.map((d) => d.district))).map(
-    (d) => ({ id: `District: ${d}`, type: "hub-district", color: LUNA.orange })
+  const hubsDistrict: Node[] = Array.from(new Set(coops.map(d => d.district))).map(
+    d => ({ id: `District: ${d}`, type: "hub-district", color: LUNA.orange })
   );
-  const hubsSector: Node[] = Array.from(new Set(coops.map((d) => d.sector))).map(
-    (s) => ({ id: `Sector: ${s}`, type: "hub-sector", color: LUNA.gold })
+  const hubsSector: Node[] = Array.from(new Set(coops.map(d => d.sector))).map(
+    s => ({ id: `Sector: ${s}`, type: "hub-sector", color: LUNA.gold })
   );
-  const hubsFdi: Node[] = Array.from(new Set(coops.map((d) => d.fdiPriority))).map(
-    (p) => ({ id: `FDI: ${p}`, type: "hub-fdi", color: LUNA.soft })
+  const hubsFdi: Node[] = Array.from(new Set(coops.map(d => d.fdiPriority))).map(
+    p => ({ id: `FDI: ${p}`, type: "hub-fdi", color: LUNA.soft })
   );
 
-  const buyers = Array.from(new Set(coops.map((c) => c.buyer)));
-  const buyerNodes: Node[] = buyers.map((buyer) => ({
+  // include two dummy buyers to guarantee presence
+  const buyerList = Array.from(new Set(coops.map(c => c.buyer).concat(["BlueWave Capital", "CaribEco Partners"])));
+  const buyerNodes: Node[] = buyerList.map(buyer => ({
     id: `Buyer: ${buyer}`,
     type: "buyer",
     label: buyer,
     color: LUNA.buyer,
-    __country: getBuyerCountry(buyer),
+    __country: buyerCountry(buyer),
   }));
 
-  const countries = Array.from(new Set(buyerNodes.map((b) => b.__country!))).sort();
-  const countryHubs: Node[] = countries.map((country) => ({
+  const countryHubs: Node[] = Array.from(new Set(buyerNodes.map(b => b.__country!))).map(country => ({
     id: `Country: ${country}`,
     type: "hub-country",
     label: country,
     color: LUNA.country,
   }));
 
-  const coopNodes: Node[] = coops.map((c) => ({
+  const coopNodes: Node[] = coops.map(c => ({
     id: c.id,
     type: "coop",
     label: c.cooperativeName,
   }));
 
   const links: Link[] = [];
-  coops.forEach((c) => {
+  coops.forEach(c => {
     links.push({ source: c.id, target: `District: ${c.district}` });
     links.push({ source: c.id, target: `Sector: ${c.sector}` });
     links.push({ source: c.id, target: `FDI: ${c.fdiPriority}` });
     links.push({ source: c.id, target: `Buyer: ${c.buyer}` });
   });
-  buyerNodes.forEach((b) => {
+  buyerNodes.forEach(b => {
     links.push({ source: b.id, target: `Country: ${b.__country}` });
   });
 
@@ -109,110 +113,81 @@ function buildGraph(coops: Cooperative[]) {
   return { nodes, links };
 }
 
-// Anchor country hubs on a neat grid; seed buyers near their hub.
-function layoutCountriesAndBuyers(
-  nodes: Node[],
-  width: number,
-  height: number,
-  padding = 32
-) {
-  const countryHubs = nodes.filter((n) => n.type === "hub-country");
-  const buyers = nodes.filter((n) => n.type === "buyer");
-
-  if (!countryHubs.length) return;
-
-  const cols = Math.min(Math.max(2, Math.ceil(Math.sqrt(countryHubs.length))), 4);
-  const rows = Math.ceil(countryHubs.length / cols);
-
+// Place country hubs on a grid and seed buyers near them
+function layoutCountriesAndBuyers(nodes: Node[], width: number, height: number) {
+  const padding = 32;
+  const hubs = nodes.filter(n => n.type === "hub-country");
+  if (!hubs.length) return;
+  const cols = Math.min(Math.max(2, Math.ceil(Math.sqrt(hubs.length))), 4);
+  const rows = Math.ceil(hubs.length / cols);
   const usableW = Math.max(1, width - padding * 2);
   const usableH = Math.max(1, height - padding * 2);
-
   const colStep = usableW / Math.max(1, cols);
   const rowStep = usableH / Math.max(1, rows);
 
-  countryHubs.forEach((hub, idx) => {
+  hubs.forEach((hub, idx) => {
     const r = Math.floor(idx / cols);
     const c = idx % cols;
-    const cx = padding + c * colStep + colStep / 2;
-    const cy = padding + r * rowStep + rowStep / 2;
-    hub.fx = cx;
-    hub.fy = cy;
+    hub.fx = padding + c * colStep + colStep / 2;
+    hub.fy = padding + r * rowStep + rowStep / 2;
   });
 
-  const hubMap = Object.fromEntries(countryHubs.map((h) => [h.id, h]));
-  const jitter = Math.min(colStep, rowStep) * 0.2;
-
-  buyers.forEach((b) => {
-    const hub = hubMap[`Country: ${b.__country}`];
-    if (hub) {
-      b.x = (hub.fx ?? width / 2) + (Math.random() - 0.5) * jitter;
-      b.y = (hub.fy ?? height / 2) + (Math.random() - 0.5) * jitter;
+  const hubMap = Object.fromEntries(hubs.map(h => [h.id, h]));
+  const buyers = nodes.filter(n => n.type === "buyer");
+  const jitter = Math.min(colStep, rowStep) * 0.25;
+  buyers.forEach(b => {
+    const h = hubMap[`Country: ${b.__country}`];
+    if (h) {
+      b.x = (h.fx ?? width / 2) + (Math.random() - 0.5) * jitter;
+      b.y = (h.fy ?? height / 2) + (Math.random() - 0.5) * jitter;
     }
   });
 }
 
-/** --------- Label helpers (clean spacing & truncation) ---------- */
-const LABEL_MAX_W = 140;      // px max label width
-const LABEL_PAD_X = 6;        // horizontal padding in pill
-const LABEL_PAD_Y = 3;        // vertical padding in pill
-const FONT_FAMILY = "sans-serif";
+/** ------- Label drawing (hover clarity, truncation, accurate hit box) ------- */
+const LABEL_MAX_W = 130;
+const PAD_X = 6;
+const PAD_Y = 3;
+const FONT = "sans-serif";
 
-function truncateToWidth(ctx: CanvasRenderingContext2D, text: string, maxW: number) {
+function truncate(ctx: CanvasRenderingContext2D, text: string, maxW: number) {
   if (ctx.measureText(text).width <= maxW) return text;
-  let lo = 0, hi = text.length, ans = text;
+  let lo = 0, hi = text.length, best = "…";
   while (lo <= hi) {
-    const mid = Math.floor((lo + hi) / 2);
+    const mid = (lo + hi) >> 1;
     const t = text.slice(0, mid) + "…";
     if (ctx.measureText(t).width <= maxW) {
-      ans = t;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
+      best = t; lo = mid + 1;
+    } else hi = mid - 1;
   }
-  return ans;
+  return best;
 }
 
-function drawLabelPill(
+function drawPill(
   ctx: CanvasRenderingContext2D,
   text: string,
   x: number,
   y: number,
   fontSize: number,
-  colorText: string,
-  align: "right" | "left" | "top" | "bottom",
-  bg = LUNA.labelBg
+  textColor: string,
+  bg: string,
+  align: "right" | "left" | "top" | "bottom"
 ) {
-  ctx.font = `${fontSize}px ${FONT_FAMILY}`;
-  const maxTextW = LABEL_MAX_W;
-  const shown = truncateToWidth(ctx, text, maxTextW);
+  ctx.font = `${fontSize}px ${FONT}`;
+  const shown = truncate(ctx, text, LABEL_MAX_W);
   const tw = ctx.measureText(shown).width;
-  const th = fontSize + LABEL_PAD_Y * 2;
+  const w = tw + PAD_X * 2;
+  const h = fontSize + PAD_Y * 2;
+
   let rx = x, ry = y;
+  const gap = 3;
+  if (align === "right") { rx = x + gap; ry = y - h / 2; }
+  else if (align === "left") { rx = x - w - gap; ry = y - h / 2; }
+  else if (align === "top") { rx = x - w / 2; ry = y - h - gap; }
+  else { rx = x - w / 2; ry = y + gap; }
 
-  // Offset placement to reduce collisions, varies by node "align"
-  const offset = 2; // gap from node circle
-  if (align === "left") {
-    rx = x - (tw + LABEL_PAD_X * 2) - offset;
-    ry = y - th / 2;
-  } else if (align === "right") {
-    rx = x + offset;
-    ry = y - th / 2;
-  } else if (align === "top") {
-    rx = x - tw / 2 - LABEL_PAD_X;
-    ry = y - th - offset;
-  } else {
-    // bottom
-    rx = x - tw / 2 - LABEL_PAD_X;
-    ry = y + offset;
-  }
-
-  // Background pill
-  ctx.fillStyle = bg;
-  const w = tw + LABEL_PAD_X * 2;
-  const h = th;
   const r = Math.min(10, h / 2);
-
+  ctx.fillStyle = bg;
   ctx.beginPath();
   ctx.moveTo(rx + r, ry);
   ctx.lineTo(rx + w - r, ry);
@@ -226,13 +201,11 @@ function drawLabelPill(
   ctx.closePath();
   ctx.fill();
 
-  // Text
-  ctx.fillStyle = colorText;
+  ctx.fillStyle = textColor;
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.fillText(shown, rx + LABEL_PAD_X, ry + h / 2);
+  ctx.fillText(shown, rx + PAD_X, ry + h / 2);
 
-  // Return bounding box for pointer area
   return { x: rx, y: ry, w, h };
 }
 
@@ -242,103 +215,115 @@ export default function EcosystemGraph({
   onSectorSelect,
   onFdiSelect,
   onBuyerSelect,
-  showReset,
-  onClearFocus,
   title = "Ecosystem Graph",
+  onClearFocus,
 }: {
   coops: Cooperative[];
   onCoopSelect: (id: string) => void;
   onSectorSelect: (sector: string) => void;
   onFdiSelect: (priority: string) => void;
   onBuyerSelect?: (buyer: string) => void;
-  showReset?: boolean;
-  onClearFocus?: () => void;
   title?: string;
+  onClearFocus?: () => void;
 }) {
   const data = useMemo(() => buildGraph(coops), [coops]);
   const fgRef = useRef<ForceGraphMethods>();
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState(420);
-  const [shouldFit, setShouldFit] = useState(true);
+  const [height, setHeight] = useState(460);
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const [hasFocus, setHasFocus] = useState(false);
 
+  // spacing & initial fit
   useEffect(() => {
-    setShouldFit(true);
-    const t = setTimeout(() => {
-      try { fgRef.current?.zoomToFit(500, 40); } catch {}
-    }, 250);
-    return () => clearTimeout(t);
-  }, [coops.length]);
+    const fg = fgRef.current as any;
+    if (!fg) return;
 
-  const applyCountryLayout = () => {
+    // Beef up spacing
+    fg.d3Force("charge")?.strength(-350);
+    fg.d3Force("link")?.distance((l: any) => {
+      const a: Node = l.source, b: Node = l.target;
+      const pair = `${a.type}-${b.type}`;
+      if (pair.includes("hub-country") || pair.includes("buyer")) return 140;
+      if (pair.includes("hub-sector")) return 120;
+      if (pair.includes("hub-fdi") || pair.includes("hub-district")) return 110;
+      return 100;
+    });
+    // avoid overlaps
+    // @ts-ignore
+    fg.d3Force("collide", require("d3-force").forceCollide(18));
+
     const el = wrapRef.current;
-    const g = (fgRef.current as any)?.graphData?.();
-    if (!el || !g) return;
-    layoutCountriesAndBuyers(g.nodes as Node[], el.clientWidth || 800, height);
-  };
+    if (el) layoutCountriesAndBuyers(data.nodes as Node[], el.clientWidth, height);
 
-  useEffect(() => {
-    applyCountryLayout();
-    const t = setTimeout(() => {
-      try { fgRef.current?.zoomToFit(500, 40); } catch {}
-    }, 60);
+    const t = setTimeout(() => fg.zoomToFit(600, 50), 300);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [height, data.nodes.length]);
+  }, [data.nodes.length, height]);
 
   const handleEngineStop = () => {
-    if (!shouldFit) return;
-    try { fgRef.current?.zoomToFit(500, 40); } catch {}
-    setShouldFit(false);
+    try { fgRef.current?.zoomToFit(600, 50); } catch {}
   };
 
-  // Drag-to-resize handle (bottom-right)
-  const startDragResize = (e: React.MouseEvent<HTMLDivElement>) => {
+  // hover state
+  const handleNodeHover = (n: any) => {
+    setHoverId(n ? String(n.id) : null);
+  };
+
+  // Click behavior (any node => show Reset)
+  const clickNode = (n: Node) => {
+    setHasFocus(true);
+    if (n.type === "coop") onCoopSelect(n.id);
+    else if (n.type === "hub-sector") onSectorSelect(n.id.replace(/^Sector:\s*/, ""));
+    else if (n.type === "hub-fdi") onFdiSelect(n.id.replace(/^FDI:\s*/, ""));
+    else if (n.type === "buyer") onBuyerSelect?.(n.id.replace(/^Buyer:\s*/, ""));
+    // Clicking district/country just toggles reset visibility
+  };
+
+  const handleBackgroundClick = () => {
+    // do nothing; keep graph as-is. (Optional: clear hover)
+  };
+
+  // Drag-to-resize
+  const startResize = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     const startY = e.clientY;
     const startH = height;
-    const onMove = (ev: MouseEvent) => {
-      const next = Math.min(1200, Math.max(260, startH + (ev.clientY - startY)));
-      setHeight(next);
-    };
+    const onMove = (ev: MouseEvent) => setHeight(Math.min(1200, Math.max(300, startH + (ev.clientY - startY))));
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
-      try {
-        applyCountryLayout();
-        fgRef.current?.zoomToFit(300, 30);
-      } catch {}
+      try { fgRef.current?.zoomToFit(400, 40); } catch {}
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   };
 
-  // Clickable area that matches the label pill
-  const nodePointerAreaPaint = (node: Node, color: string, ctx: CanvasRenderingContext2D) => {
-    // Use cached label metrics if available
-    const lw = node.__lw ?? 110;
-    const lh = node.__lh ?? 16;
-    ctx.fillStyle = color;
-    // Expand a bit around the node’s right side (default)
-    ctx.fillRect((node.x || 0) + 2, (node.y || 0) - lh / 2, lw, lh);
-    // Also include the circle
-    const r = (node.type?.startsWith("hub") || node.type === "buyer") ? 12 : 8;
-    ctx.beginPath();
-    ctx.arc(node.x || 0, node.y || 0, r, 0, Math.PI * 2);
-    ctx.fill();
+  const resetAll = () => {
+    setHasFocus(false);
+    onClearFocus?.();
+    try { fgRef.current?.zoomToFit(600, 50); } catch {}
   };
 
-  const resetGraph = () => {
-    onClearFocus?.();
-    try { fgRef.current?.zoomToFit(400, 40); } catch {}
+  // pointer area matches pill + circle for ALL alignments
+  const nodePointerAreaPaint = (node: any, color: string, ctx: CanvasRenderingContext2D) => {
+    const n = node as Node;
+    ctx.fillStyle = color;
+    const r = (n.type?.startsWith("hub") || n.type === "buyer") ? 12 : 8;
+    ctx.beginPath();
+    ctx.arc(n.x || 0, n.y || 0, r + 2, 0, Math.PI * 2);
+    ctx.fill();
+    if (n.__bbox) {
+      const { x, y, w, h } = n.__bbox;
+      ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+    }
   };
 
   return (
     <Card>
       <CardHeader className="flex items-center justify-between">
-        <CardTitle>{title}</CardTitle>
-        {showReset ? (
-          <Button variant="outline" onClick={resetGraph}>Reset</Button>
-        ) : null}
+        <CardTitle>Ecosystem Graph</CardTitle>
+        {hasFocus && (
+          <Button variant="outline" onClick={resetAll}>Reset</Button>
+        )}
       </CardHeader>
       <CardContent className="relative p-0">
         <div ref={wrapRef} style={{ height }}>
@@ -346,35 +331,25 @@ export default function EcosystemGraph({
             ref={fgRef as any}
             graphData={data}
             onEngineStop={handleEngineStop}
+            onBackgroundClick={handleBackgroundClick}
             enableZoomPanInteraction
             enablePointerInteraction
             nodeRelSize={6}
             linkColor={() => "#3a3a3a"}
             nodePointerAreaPaint={nodePointerAreaPaint as any}
-            onNodeClick={(n: any) => {
-              if (n.type === "coop") onCoopSelect(n.id as string);
-              else if (n.type === "hub-sector") {
-                const sector = String(n.id).replace(/^Sector:\s*/, "");
-                onSectorSelect(sector);
-              } else if (n.type === "hub-fdi") {
-                const p = String(n.id).replace(/^FDI:\s*/, "");
-                onFdiSelect(p);
-              } else if (n.type === "buyer") {
-                const buyer = String(n.id).replace(/^Buyer:\s*/, "");
-                onBuyerSelect?.(buyer);
-              }
-            }}
+            onNodeHover={handleNodeHover}
+            onNodeClick={(n: any) => clickNode(n as Node)}
             nodeCanvasObject={(node: any, ctx, globalScale) => {
               const n = node as Node;
               const isHub = n.type?.startsWith("hub");
               const isBuyer = n.type === "buyer";
               const isCountry = n.type === "hub-country";
-              const r = isHub || isBuyer ? 10 : 5;
+              const radius = isHub || isBuyer ? 10 : 6;
 
-              // draw node circle
+              // node circle
               ctx.beginPath();
-              ctx.arc(n.x!, n.y!, r, 0, 2 * Math.PI, false);
-              let fill = "#ffffff";
+              ctx.arc(n.x!, n.y!, radius, 0, 2 * Math.PI);
+              let fill = "#fff";
               if (n.type === "hub-district") fill = LUNA.orange;
               if (n.type === "hub-sector") fill = LUNA.gold;
               if (n.type === "hub-fdi") fill = LUNA.soft;
@@ -383,51 +358,44 @@ export default function EcosystemGraph({
               ctx.fillStyle = fill;
               ctx.fill();
 
-              // label text & placement
-              const base = isHub
-                ? String(n.id).replace(/^(Sector|FDI|District|Country):\s*/, "")
-                : isBuyer
-                ? n.label || String(n.id).replace(/^Buyer:\s*/, "")
-                : n.label || n.id;
-              const fs = (isHub || isBuyer) ? Math.max(10, 12 / Math.sqrt(globalScale)) : Math.max(9, 10 / Math.sqrt(globalScale));
+              // label text (small & translucent; brighten on hover)
+              const isHover = hoverId === n.id;
+              const base =
+                isHub
+                  ? String(n.id).replace(/^(Sector|FDI|District|Country):\s*/, "")
+                  : isBuyer
+                  ? n.label || String(n.id).replace(/^Buyer:\s*/, "")
+                  : n.label || n.id;
 
-              // choose placement to avoid crowding:
-              // - country: top
-              // - sector: right
-              // - district: left
-              // - fdi: bottom
-              // - buyer: right
-              // - coop: right
-              let align: "right" | "left" | "top" | "bottom" = "right";
-              if (n.type === "hub-country") align = "top";
-              else if (n.type === "hub-district") align = "left";
-              else if (n.type === "hub-fdi") align = "bottom";
-              else align = "right";
+              // default small font; larger & crisper on hover
+              const fsBase = (isHub || isBuyer) ? 10 : 9;
+              const fsHover = (isHub || isBuyer) ? 13 : 12;
+              const fs = Math.max(isHover ? fsHover : fsBase, (isHover ? 13 : 10) / Math.sqrt(globalScale));
 
-              const { w, h } = (() => {
-                const rect = drawLabelPill(
-                  ctx,
-                  base,
-                  n.x!,
-                  n.y!,
-                  fs,
-                  (isHub || isBuyer) ? LUNA.labelText : LUNA.labelTextDim,
-                  align
-                );
-                // cache for pointer hit area
-                n.__lw = rect.w + 20; // slightly larger area for easier clicks
-                n.__lh = rect.h + 6;
-                return rect;
-              })();
+              // placement to avoid crowding
+              let where: "right" | "left" | "top" | "bottom" = "right";
+              if (n.type === "hub-country") where = "top";
+              else if (n.type === "hub-district") where = "left";
+              else if (n.type === "hub-fdi") where = "bottom";
+
+              // translucent by default, solid on hover
+              const pillBg = isHover ? LUNA.labelBgHover : LUNA.labelBg;
+              const textColor = isHover
+                ? "white"
+                : (isHub || isBuyer) ? LUNA.labelText : LUNA.labelTextDim;
+
+              // draw pill + text (and cache bbox for pointer hit)
+              const { x, y, w, h } = drawPill(ctx, base, n.x!, n.y!, fs, textColor, pillBg, where);
+              n.__bbox = { x, y, w, h };
             }}
           />
         </div>
 
-        {/* Resize handle */}
+        {/* resize handle */}
         <div
           aria-label="Resize graph"
           title="Drag to resize"
-          onMouseDown={startDragResize}
+          onMouseDown={startResize}
           className="absolute bottom-2 right-2 w-6 h-6 flex items-center justify-center rounded-md cursor-nwse-resize select-none"
           style={{ color: "#9ca3af" }}
         >
