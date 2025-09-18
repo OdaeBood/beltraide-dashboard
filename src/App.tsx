@@ -19,7 +19,7 @@ import {
 } from "./data/coops";
 
 export default function App() {
-  // Work only with Blue Economy sectors across the whole app
+  // Work only with Blue Economy sectors
   const BASE: Cooperative[] = useMemo(
     () => COOPS.filter((c) => BLUE_SECTORS.includes(c.sector)),
     []
@@ -69,7 +69,6 @@ export default function App() {
           <h1 className="text-2xl font-semibold">
             LunaMaps-BELTRAIDE “Blue Economy” Ecosystem
           </h1>
-          <p className="text-zinc-400">GitHub Pages build via Actions</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => exportCSV(filtered)}>
@@ -78,7 +77,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Row 1: Filters (left) • Ecosystem Graph (center) • Snapshot (right) */}
+      {/* Row 1: Filters • Ecosystem Graph • Snapshot */}
       <div className="grid grid-cols-12 gap-6 mb-6">
         {/* Filters */}
         <div className="col-span-12 lg:col-span-3">
@@ -99,7 +98,7 @@ export default function App() {
           </Card>
         </div>
 
-        {/* Ecosystem Graph (center) */}
+        {/* Ecosystem Graph */}
         <div className="col-span-12 lg:col-span-6">
           <EcosystemGraph
             coops={filtered}
@@ -110,7 +109,7 @@ export default function App() {
           />
         </div>
 
-        {/* Snapshot (right) */}
+        {/* Snapshot */}
         <div className="col-span-12 lg:col-span-3">
           <div className="sticky top-6">
             <Card>
@@ -118,18 +117,18 @@ export default function App() {
                 <CardTitle>Snapshot</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-zinc-300 space-y-1">
-                <div> Total co-ops: <b>{filtered.length}</b></div>
-                <div> Total members: <b>{totalMembers}</b></div>
-                <div> Total capacity: <b>{totalCapacity}</b></div>
-                <div> # of Buyers: <b>{uniqueBuyersCount}</b></div>
+                <div>Total co-ops: <b>{filtered.length}</b></div>
+                <div>Total members: <b>{totalMembers}</b></div>
+                <div>Total capacity: <b>{totalCapacity}</b></div>
+                <div># of Buyers: <b>{uniqueBuyersCount}</b></div>
 
                 {(filters.sector || filters.fdiPriority) && (
                   <div className="pt-2 space-y-1">
                     {filters.sector && (
-                      <div> Focus — Sector: <b>{filters.sector}</b></div>
+                      <div>Focus — Sector: <b>{filters.sector}</b></div>
                     )}
                     {filters.fdiPriority && (
-                      <div> Focus — FDI Priority: <b>{filters.fdiPriority}</b></div>
+                      <div>Focus — FDI Priority: <b>{filters.fdiPriority}</b></div>
                     )}
                     <div className="pt-1">
                       <Button
