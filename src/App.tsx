@@ -6,7 +6,7 @@ import ChartsPanel from "./components/ChartsPanel";
 import CoopTable from "./components/CoopTable";
 import FiltersPanel from "./components/FiltersPanel";
 import CoopDetails from "./components/CoopDetails";
-import EcosystemGraph from "./components/EcosystemGraph";
+import EcosystemGraph from "./components/NetworkGraph";
 
 import {
   COOPS,
