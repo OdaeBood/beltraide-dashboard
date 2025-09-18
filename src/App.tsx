@@ -18,10 +18,12 @@ import {
 } from "./data/coops";
 
 export default function App() {
+  // filters and selection
   const [filters, setFilters] = useState<CoopFilters>(defaultCoopFilters());
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [showSnapshot, setShowSnapshot] = useState<boolean>(false);
 
+  // derived data
   const buyers = useMemo(
     () => Array.from(new Set(COOPS.map((c) => c.buyer))).sort(),
     []
@@ -31,9 +33,14 @@ export default function App() {
     () => COOPS.find((c) => c.id === selectedId),
     [selectedId]
   );
+  const buyerCount = useMemo(
+    () => new Set(filtered.map((c) => c.buyer)).size,
+    [filtered]
+  );
 
-  // Graph interactions
+  // graph → table/details interactions
   const handleCoopSelect = (id: string) => setSelectedId(id);
+
   const handleSectorFromGraph = (sector: string) => {
     setFilters((f) => ({ ...f, sector }));
     setShowSnapshot(true);
@@ -60,10 +67,9 @@ export default function App() {
         </div>
       </div>
 
-      {/* ROW 1: Filters • Graph • Snapshot */}
+      {/* Filters + List */}
       <div className="grid grid-cols-12 gap-6 mb-6">
-        {/* Filters (left) */}
-        <div className="col-span-12 lg:col-span-3">
+        <div className="col-span-12 md:col-span-4">
           <Card>
             <CardHeader>
               <CardTitle>Filters</CardTitle>
@@ -81,8 +87,21 @@ export default function App() {
           </Card>
         </div>
 
-        {/* Ecosystem Graph (center) */}
-        <div className="col-span-12 lg:col-span-6">
+        <div className="col-span-12 md:col-span-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Cooperatives ({filtered.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CoopTable data={filtered} onSelect={setSelectedId} />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Ecosystem graph + Snapshot + Metrics */}
+      <div className="grid grid-cols-12 gap-6 mb-6">
+        <div className="col-span-12 lg:col-span-8">
           <EcosystemGraph
             coops={filtered}
             onCoopSelect={handleCoopSelect}
@@ -92,9 +111,8 @@ export default function App() {
           />
         </div>
 
-        {/* Snapshot (right) */}
-        <div className="col-span-12 lg:col-span-3">
-          <div className="sticky top-6">
+        <div className="col-span-12 lg:col-span-4">
+          <div className="sticky top-6 space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Snapshot</CardTitle>
@@ -110,6 +128,9 @@ export default function App() {
                 <div>
                   Total capacity:{" "}
                   <b>{filtered.reduce((a, c) => a + c.capacity, 0)}</b>
+                </div>
+                <div>
+                  Unique buyers: <b>{buyerCount}</b>
                 </div>
 
                 {(filters.sector || filters.fdiPriority) && (
@@ -147,19 +168,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* ROW 2: Cooperatives table (full width) */}
-      <div className="mb-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Cooperatives ({filtered.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CoopTable data={filtered} onSelect={setSelectedId} />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ROW 3: Charts (full width) */}
+      {/* Charts */}
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-12">
           <ChartsPanel coops={filtered} />
@@ -167,7 +176,10 @@ export default function App() {
       </div>
 
       {/* Details drawer */}
-      <CoopDetails coop={selected} onClose={() => setSelectedId(undefined)} />
+      <CoopDetails
+        coop={selected}
+        onClose={() => setSelectedId(undefined)}
+      />
     </main>
   );
 }
