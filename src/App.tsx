@@ -6,10 +6,11 @@ import ChartsPanel from "./components/ChartsPanel";
 import CoopTable from "./components/CoopTable";
 import FiltersPanel from "./components/FiltersPanel";
 import CoopDetails from "./components/CoopDetails";
-import EcosystemGraph from "./components/NetworkGraph";
+import EcosystemGraph from "./components/EcosystemGraph";
 
 import {
   COOPS,
+  type Cooperative,
   filterCoops,
   defaultCoopFilters,
   type CoopFilters,
@@ -19,6 +20,7 @@ import {
 export default function App() {
   const [filters, setFilters] = useState<CoopFilters>(defaultCoopFilters());
   const [selectedId, setSelectedId] = useState<string | undefined>();
+  const [showSnapshot, setShowSnapshot] = useState<boolean>(false);
 
   const buyers = useMemo(
     () => Array.from(new Set(COOPS.map((c) => c.buyer))).sort(),
@@ -30,12 +32,16 @@ export default function App() {
     [selectedId]
   );
 
-  // graph → table/details interactions
+  // Graph interactions
   const handleCoopSelect = (id: string) => setSelectedId(id);
-  const handleSectorFromGraph = (sector: string) =>
+  const handleSectorFromGraph = (sector: string) => {
     setFilters((f) => ({ ...f, sector }));
-  const handleFdiFromGraph = (priority: string) =>
+    setShowSnapshot(true);
+  };
+  const handleFdiFromGraph = (priority: string) => {
     setFilters((f) => ({ ...f, fdiPriority: priority }));
+    setShowSnapshot(true);
+  };
 
   return (
     <main className="min-h-screen p-6">
@@ -64,7 +70,10 @@ export default function App() {
             <CardContent>
               <FiltersPanel
                 filters={filters}
-                setFilters={(f) => setFilters(f)}
+                setFilters={(f) => {
+                  setFilters(f);
+                  if (!f.sector && !f.fdiPriority) setShowSnapshot(false);
+                }}
                 allBuyers={buyers}
               />
             </CardContent>
@@ -106,10 +115,12 @@ export default function App() {
                   Total co-ops: <b>{filtered.length}</b>
                 </div>
                 <div>
-                  Total members: <b>{filtered.reduce((a, c) => a + c.members, 0)}</b>
+                  Total members:{" "}
+                  <b>{filtered.reduce((a, c) => a + c.members, 0)}</b>
                 </div>
                 <div>
-                  Total capacity: <b>{filtered.reduce((a, c) => a + c.capacity, 0)}</b>
+                  Total capacity:{" "}
+                  <b>{filtered.reduce((a, c) => a + c.capacity, 0)}</b>
                 </div>
 
                 {(filters.sector || filters.fdiPriority) && (
@@ -127,13 +138,14 @@ export default function App() {
                     <div className="pt-1">
                       <Button
                         variant="ghost"
-                        onClick={() =>
+                        onClick={() => {
                           setFilters((f) => ({
                             ...f,
                             sector: undefined,
                             fdiPriority: undefined,
-                          }))
-                        }
+                          }));
+                          setShowSnapshot(false);
+                        }}
                       >
                         Clear focus
                       </Button>
