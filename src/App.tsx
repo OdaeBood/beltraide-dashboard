@@ -22,7 +22,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [showSnapshot, setShowSnapshot] = useState<boolean>(false);
 
-  const buyersAll = useMemo(
+  const buyers = useMemo(
     () => Array.from(new Set(COOPS.map((c) => c.buyer))).sort(),
     []
   );
@@ -31,32 +31,16 @@ export default function App() {
     () => COOPS.find((c) => c.id === selectedId),
     [selectedId]
   );
-  const buyersInFiltered = useMemo(
-    () => new Set(filtered.map((c) => c.buyer)),
-    [filtered]
-  );
-
-  const hasFocus = !!(filters.sector || filters.fdiPriority || filters.buyer);
 
   const handleCoopSelect = (id: string) => setSelectedId(id);
+
   const handleSectorFromGraph = (sector: string) => {
-    setFilters((f) => ({ ...f, sector, fdiPriority: f.fdiPriority }));
+    setFilters((f) => ({ ...f, sector }));
     setShowSnapshot(true);
-    setSelectedId(undefined);
   };
   const handleFdiFromGraph = (priority: string) => {
-    setFilters((f) => ({ ...f, fdiPriority: priority, sector: f.sector }));
+    setFilters((f) => ({ ...f, fdiPriority: priority }));
     setShowSnapshot(true);
-    setSelectedId(undefined);
-  };
-  const handleBuyerFromGraph = (buyer: string) => {
-    setFilters((f) => ({ ...f, buyer }));
-    setShowSnapshot(true);
-    setSelectedId(undefined);
-  };
-  const clearFocus = () => {
-    setFilters((f) => ({ ...f, sector: undefined, fdiPriority: undefined, buyer: undefined }));
-    setShowSnapshot(false);
   };
 
   return (
@@ -75,9 +59,8 @@ export default function App() {
         </div>
       </div>
 
-      {/* Top row: Filters | Ecosystem Graph | Snapshot */}
+      {/* Filters + Graph + Snapshot */}
       <div className="grid grid-cols-12 gap-6 mb-6">
-        {/* Left: Filters */}
         <div className="col-span-12 md:col-span-3">
           <Card>
             <CardHeader>
@@ -88,29 +71,24 @@ export default function App() {
                 filters={filters}
                 setFilters={(f) => {
                   setFilters(f);
-                  if (!f.sector && !f.fdiPriority && !f.buyer) setShowSnapshot(false);
+                  if (!f.sector && !f.fdiPriority) setShowSnapshot(false);
                 }}
-                allBuyers={buyersAll}
+                allBuyers={buyers}
               />
             </CardContent>
           </Card>
         </div>
 
-        {/* Center: Ecosystem Graph */}
         <div className="col-span-12 md:col-span-6">
           <EcosystemGraph
             coops={filtered}
             onCoopSelect={handleCoopSelect}
             onSectorSelect={handleSectorFromGraph}
             onFdiSelect={handleFdiFromGraph}
-            onBuyerSelect={handleBuyerFromGraph}
-            showReset={hasFocus}
-            onClearFocus={clearFocus}
             title="Ecosystem Graph"
           />
         </div>
 
-        {/* Right: Snapshot */}
         <div className="col-span-12 md:col-span-3">
           <div className="sticky top-6 space-y-6">
             <Card>
@@ -118,24 +96,35 @@ export default function App() {
                 <CardTitle>Snapshot</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-zinc-300 space-y-1">
-                <div> Total co-ops: <b>{filtered.length}</b> </div>
-                <div> Total members: <b>{filtered.reduce((a, c) => a + c.members, 0)}</b> </div>
-                <div> Total capacity: <b>{filtered.reduce((a, c) => a + c.capacity, 0)}</b> </div>
-                <div> # of Buyers: <b>{buyersInFiltered.size}</b> </div>
+                <div>Total co-ops: <b>{filtered.length}</b></div>
+                <div>Total members: <b>{filtered.reduce((a, c) => a + c.members, 0)}</b></div>
+                <div>Total capacity: <b>{filtered.reduce((a, c) => a + c.capacity, 0)}</b></div>
+                <div>Total buyers: <b>{new Set(filtered.map(c => c.buyer)).size}</b></div>
 
-                {(filters.sector || filters.fdiPriority || filters.buyer) && (
+                {(filters.sector || filters.fdiPriority) && (
                   <div className="pt-2 space-y-1">
                     {filters.sector && (
-                      <div> Focus — Sector: <b>{filters.sector}</b> </div>
+                      <div>
+                        Focus — Sector: <b>{filters.sector}</b>
+                      </div>
                     )}
                     {filters.fdiPriority && (
-                      <div> Focus — FDI Priority: <b>{filters.fdiPriority}</b> </div>
-                    )}
-                    {filters.buyer && (
-                      <div> Focus — Buyer: <b>{filters.buyer}</b> </div>
+                      <div>
+                        Focus — FDI Priority: <b>{filters.fdiPriority}</b>
+                      </div>
                     )}
                     <div className="pt-1">
-                      <Button variant="ghost" onClick={clearFocus}>
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          setFilters((f) => ({
+                            ...f,
+                            sector: undefined,
+                            fdiPriority: undefined,
+                          }));
+                          setShowSnapshot(false);
+                        }}
+                      >
                         Clear focus
                       </Button>
                     </div>
@@ -147,7 +136,14 @@ export default function App() {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Charts */}
+      <div className="grid grid-cols-12 gap-6 mb-6">
+        <div className="col-span-12">
+          <ChartsPanel coops={filtered} />
+        </div>
+      </div>
+
+      {/* Cooperatives table at the very bottom */}
       <div className="grid grid-cols-12 gap-6 mb-6">
         <div className="col-span-12">
           <Card>
@@ -158,13 +154,6 @@ export default function App() {
               <CoopTable data={filtered} onSelect={setSelectedId} />
             </CardContent>
           </Card>
-        </div>
-      </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-12 gap-6">
-        <div className="col-span-12">
-          <ChartsPanel coops={filtered} />
         </div>
       </div>
 
