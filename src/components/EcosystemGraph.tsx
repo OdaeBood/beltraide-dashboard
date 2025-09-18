@@ -1,7 +1,7 @@
 // src/components/EcosystemGraph.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D, { ForceGraphMethods } from "react-force-graph-2d";
-import { Card, CardContent, CardHeader, CardTitle } from "../lib/ui";
+import { Card, CardContent, CardHeader, CardTitle, Button } from "../lib/ui";
 import type { Cooperative } from "../data/coops";
 
 // Palette aligned with the rest of the UI
@@ -18,7 +18,6 @@ type Node = {
   type: NodeType;
   label?: string;
   color?: string;
-  // optional fixed position
   fx?: number;
   fy?: number;
   x?: number;
@@ -27,11 +26,7 @@ type Node = {
 
 type Link = { source: string; target: string };
 
-/**
- * Map buyers to a country (category). If a buyer isn't listed,
- * we default to "Belize" so nothing breaks.
- * (You can expand/adjust this mapping over time.)
- */
+// Map buyers to country groups (not GPS)
 const BUYER_COUNTRY: Record<string, string> = {
   "Belize Sea Co.": "Belize",
   "Blue Foods Ltd.": "Mexico",
@@ -41,6 +36,10 @@ const BUYER_COUNTRY: Record<string, string> = {
   "BelSea Export": "Belize",
   "MarSea Intl": "USA",
   "Green Journeys": "Belize",
+
+  // NEW buyers in other locations
+  "BlueWave Capital": "USA",
+  "CaribEco Partners": "Jamaica",
 };
 
 function getBuyerCountry(buyer: string) {
@@ -48,7 +47,6 @@ function getBuyerCountry(buyer: string) {
 }
 
 function buildGraph(coops: Cooperative[]) {
-  // Hubs
   const hubsDistrict: Node[] = Array.from(new Set(coops.map((d) => d.district))).map(
     (d) => ({ id: `District: ${d}`, type: "hub-district", color: LUNA.orange })
   );
@@ -59,27 +57,21 @@ function buildGraph(coops: Cooperative[]) {
     (p) => ({ id: `FDI: ${p}`, type: "hub-fdi", color: LUNA.soft })
   );
 
-  // Co-op nodes
   const coopNodes: Node[] = coops.map((c) => ({
     id: c.id,
     type: "coop",
     label: c.cooperativeName,
   }));
 
-  // Buyer nodes (grouped by country)
   const buyers = Array.from(new Set(coops.map((c) => c.buyer)));
   const buyerNodes: Node[] = buyers.map((buyer) => ({
     id: `Buyer: ${buyer}`,
     type: "buyer",
     label: buyer,
     color: LUNA.buyer,
-    // country is only used for layout; stash it internally
-    // (TS hint: we’ll attach it as any to avoid changing types)
   })) as Node[];
-  // attach country
   (buyerNodes as any).forEach((n: any) => (n.__country = getBuyerCountry(n.label)));
 
-  // Links
   const links: Link[] = [];
   coops.forEach((c) => {
     links.push({ source: c.id, target: `District: ${c.district}` });
@@ -92,10 +84,6 @@ function buildGraph(coops: Cooperative[]) {
   return { nodes, links };
 }
 
-/**
- * A simple country-based layout: each country gets a slot on the canvas.
- * We compute a grid of anchor points and assign buyers to their country’s slot.
- */
 function placeBuyersByCountry(
   nodes: Node[],
   width: number,
@@ -107,7 +95,6 @@ function placeBuyersByCountry(
 
   const countries = Array.from(new Set(buyers.map((b) => b.__country))).sort();
 
-  // Build a grid of slots
   const cols = Math.min(Math.max(2, Math.ceil(Math.sqrt(countries.length))), 4);
   const rows = Math.ceil(countries.length / cols);
 
@@ -126,7 +113,6 @@ function placeBuyersByCountry(
     centers[country] = { x: cx, y: cy };
   });
 
-  // Assign each buyer to its country center, with a small jitter
   const jitter = Math.min(colStep, rowStep) * 0.15;
   buyers.forEach((b) => {
     const ctr = centers[b.__country] || { x: width / 2, y: height / 2 };
@@ -140,7 +126,9 @@ export default function EcosystemGraph({
   onCoopSelect,
   onSectorSelect,
   onFdiSelect,
-  onBuyerSelect, // optional
+  onBuyerSelect,
+  showReset,          // show reset button when a focus is active
+  onClearFocus,       // clear filters in parent
   title = "Ecosystem Graph",
 }: {
   coops: Cooperative[];
@@ -148,6 +136,8 @@ export default function EcosystemGraph({
   onSectorSelect: (sector: string) => void;
   onFdiSelect: (priority: string) => void;
   onBuyerSelect?: (buyer: string) => void;
+  showReset?: boolean;
+  onClearFocus?: () => void;
   title?: string;
 }) {
   const data = useMemo(() => buildGraph(coops), [coops]);
@@ -156,7 +146,6 @@ export default function EcosystemGraph({
   const [height, setHeight] = useState(420);
   const [shouldFit, setShouldFit] = useState(true);
 
-  // Ensure we see nodes immediately on first load and when data changes
   useEffect(() => {
     setShouldFit(true);
     const t = setTimeout(() => {
@@ -167,7 +156,6 @@ export default function EcosystemGraph({
     return () => clearTimeout(t);
   }, [coops.length]);
 
-  // Also fit once the engine stops on first render
   const handleEngineStop = () => {
     if (!shouldFit) return;
     try {
@@ -176,7 +164,6 @@ export default function EcosystemGraph({
     setShouldFit(false);
   };
 
-  // Apply country layout for buyers whenever size/data changes
   const applyBuyerLayout = () => {
     const el = wrapRef.current;
     const g = (fgRef.current as any)?.graphData?.();
@@ -196,7 +183,6 @@ export default function EcosystemGraph({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [height, data.nodes.length]);
 
-  // Drag-to-resize handle (bottom-right)
   const startDragResize = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     const startY = e.clientY;
@@ -217,21 +203,32 @@ export default function EcosystemGraph({
     window.addEventListener("mouseup", onUp);
   };
 
-  // Bigger pointer area so labels are also “clickable”
   const nodePointerAreaPaint = (node: any, color: string, ctx: CanvasRenderingContext2D) => {
     const hubLike = node.type?.startsWith("hub") || node.type === "buyer";
     const r = hubLike ? 12 : 8;
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-    ctx.fillRect(node.x, node.y - r * 0.8, 110, r * 1.6);
+    ctx.fillRect(node.x, node.y - r * 0.8, 120, r * 1.6);
     ctx.fill();
+  };
+
+  const resetGraph = () => {
+    onClearFocus?.();
+    try {
+      fgRef.current?.zoomToFit(400, 40);
+    } catch {}
   };
 
   return (
     <Card>
       <CardHeader className="flex items-center justify-between">
         <CardTitle>{title}</CardTitle>
+        {showReset ? (
+          <Button variant="outline" onClick={resetGraph}>
+            Reset
+          </Button>
+        ) : null}
       </CardHeader>
       <CardContent className="relative p-0">
         <div ref={wrapRef} style={{ height }}>
@@ -262,7 +259,6 @@ export default function EcosystemGraph({
               const isBuyer = node.type === "buyer";
               const r = isHub || isBuyer ? 10 : 5;
 
-              // Circle
               ctx.beginPath();
               ctx.arc(node.x, node.y, r, 0, 2 * Math.PI, false);
 
@@ -275,7 +271,6 @@ export default function EcosystemGraph({
               ctx.fillStyle = fill;
               ctx.fill();
 
-              // Label
               const label = isHub
                 ? String(node.id).replace(/^(Sector|FDI|District):\s*/, "")
                 : isBuyer
