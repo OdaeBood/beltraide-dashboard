@@ -205,6 +205,7 @@ export type CoopFilters = {
   fdiPriority?: string;
   esg?: string;
   exportHistory?: "Local" | "Regional" | "International";
+   buyerCountry?: string; //
   minMembers: number;
   maxMembers: number;
   minCapacity: number;
@@ -237,6 +238,9 @@ export function filterCoops(list: Cooperative[], f: CoopFilters): Cooperative[] 
     if (f.fdiPriority && c.fdiPriority !== f.fdiPriority) return false;
     if (f.esg && !c.esg.includes(f.esg)) return false;
     if (f.exportHistory && !c.exportHistory.includes(f.exportHistory)) return false;
+  
+    if (f.buyerCountry && (c as any).buyerCountry !== f.buyerCountry) return false;
+    
     if (c.members < f.minMembers || c.members > f.maxMembers) return false;
     if (c.capacity < f.minCapacity || c.capacity > f.maxCapacity) return false;
     return true;
