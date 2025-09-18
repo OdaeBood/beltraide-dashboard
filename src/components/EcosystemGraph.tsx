@@ -1,7 +1,7 @@
 // src/components/EcosystemGraph.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D, { ForceGraphMethods } from "react-force-graph-2d";
-import { Card, CardContent, CardHeader, CardTitle, Button } from "../lib/ui";
+import { Card, CardContent, CardHeader, CardTitle, Button } from "./lib/ui";
 import type { Cooperative } from "../data/coops";
 
 /**
