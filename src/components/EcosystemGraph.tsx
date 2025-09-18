@@ -4,7 +4,7 @@ import ForceGraph2D, { ForceGraphMethods } from "react-force-graph-2d";
 import { Card, CardContent, CardHeader, CardTitle } from "../lib/ui";
 import type { Cooperative } from "../data/coops";
 
-// Palette
+// Palette (matches the rest of the UI)
 const LUNA = {
   gold: "#F9C74F",
   orange: "#F9844A",
@@ -67,7 +67,7 @@ export default function EcosystemGraph({
   const [height, setHeight] = useState(380);
   const [shouldFit, setShouldFit] = useState(true);
 
-  // Fit graph to screen on load
+  // Ensure we see nodes immediately on first load and when data changes
   useEffect(() => {
     setShouldFit(true);
     const t = setTimeout(() => {
@@ -78,6 +78,7 @@ export default function EcosystemGraph({
     return () => clearTimeout(t);
   }, [coops.length]);
 
+  // Also fit once when the engine stops
   const handleEngineStop = () => {
     if (!shouldFit) return;
     try {
@@ -86,7 +87,7 @@ export default function EcosystemGraph({
     setShouldFit(false);
   };
 
-  // Resize handle (drag bottom-right corner)
+  // Drag-to-resize handle (bottom-right)
   const startDragResize = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     const startY = e.clientY;
@@ -121,6 +122,12 @@ export default function EcosystemGraph({
             enablePointerInteraction
             nodeRelSize={6}
             linkColor={() => "#3a3a3a"}
+            // pointer cursor on hover (labels or nodes)
+            onNodeHover={(n) => {
+              const canvas = (fgRef.current as any)?.canvas?.();
+              if (canvas) canvas.style.cursor = n ? "pointer" : "grab";
+            }}
+            // clicking nodes → filters or details
             onNodeClick={(n: any) => {
               if (n.type === "coop") onCoopSelect(n.id as string);
               else if (n.type === "hub-sector") {
@@ -131,6 +138,7 @@ export default function EcosystemGraph({
                 onFdiSelect(p);
               }
             }}
+            // draw node + label
             nodeCanvasObject={(node: any, ctx, globalScale) => {
               const isHub = node.type?.startsWith("hub");
               const r = isHub ? 10 : 5;
@@ -152,6 +160,32 @@ export default function EcosystemGraph({
               ctx.textBaseline = "middle";
               ctx.fillStyle = isHub ? "#e5e5e5" : "#a1a1aa";
               ctx.fillText(label, node.x + r + 3, node.y);
+            }}
+            // make labels clickable too by expanding the pointer area
+            nodePointerAreaPaint={(node: any, color, ctx, globalScale) => {
+              const isHub = node.type?.startsWith("hub");
+              const r = isHub ? 10 : 5;
+
+              // Circle area
+              ctx.fillStyle = color;
+              ctx.beginPath();
+              ctx.arc(node.x, node.y, r, 0, 2 * Math.PI, false);
+              ctx.fill();
+
+              // Label area
+              const label = isHub
+                ? String(node.id).replace(/^(Sector|FDI|District):\s*/, "")
+                : node.label || node.id;
+
+              const fontSize = isHub ? 4 + 4 / Math.sqrt(globalScale) : 3 + 3 / Math.sqrt(globalScale);
+              ctx.font = `${fontSize}px sans-serif`;
+              const padY = fontSize * 0.8; // height approximation
+              const width = ctx.measureText(label).width;
+
+              // Rect covering the label to make it clickable
+              const x = node.x + r + 2;
+              const y = node.y - padY / 2;
+              ctx.fillRect(x, y, width + 4, padY);
             }}
           />
         </div>
