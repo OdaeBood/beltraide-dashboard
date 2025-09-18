@@ -8,6 +8,7 @@ export type Cooperative = {
   sector: string;
   valueChain: "Producer" | "Processor" | "Exporter";
   buyer: string;
+  buyerCountry?: string; // NEW: normalized buyer location (country)
   members: number;
   capacity: number;
   capacityUnit: string;
@@ -25,7 +26,13 @@ export const SECTORS = ["Seaweed", "Aquaculture", "Eco-tourism", "Fisheries"];
 export const BLUE_SECTORS = ["Seaweed", "Aquaculture", "Eco-tourism", "Fisheries"];
 export const DISTRICTS = ["Belize", "Cayo", "Corozal", "Orange Walk", "Stann Creek", "Toledo"];
 export const VALUE_CHAIN: Cooperative["valueChain"][] = ["Producer", "Processor", "Exporter"];
-export const FDI_PRIORITIES = ["Blue Economy", "Sustainable Tourism", "Agribusiness & Fisheries", "BPO/ICT", "Renewable Energy"];
+export const FDI_PRIORITIES = [
+  "Blue Economy",
+  "Sustainable Tourism",
+  "Agribusiness & Fisheries",
+  "BPO/ICT",
+  "Renewable Energy",
+];
 export const CERTS = ["Organic", "Fair Trade", "HACCP", "ISO 22000", "MSC"];
 export const ESG_TAGS = ["Climate", "Biodiversity", "Community", "Youth", "Gender"];
 
@@ -40,6 +47,7 @@ export const COOPS: Cooperative[] = [
     sector: "Seaweed",
     valueChain: "Producer",
     buyer: "Belize Sea Co.",
+    buyerCountry: "Belize",
     members: 45,
     capacity: 12,
     capacityUnit: "tons",
@@ -60,6 +68,7 @@ export const COOPS: Cooperative[] = [
     sector: "Aquaculture",
     valueChain: "Processor",
     buyer: "Blue Foods Ltd.",
+    buyerCountry: "Belize",
     members: 60,
     capacity: 6000,
     capacityUnit: "kg",
@@ -80,6 +89,7 @@ export const COOPS: Cooperative[] = [
     sector: "Eco-tourism",
     valueChain: "Exporter",
     buyer: "Global Travel Partners",
+    buyerCountry: "Belize",
     members: 55,
     capacity: 15000,
     capacityUnit: "units",
@@ -100,6 +110,7 @@ export const COOPS: Cooperative[] = [
     sector: "Fisheries",
     valueChain: "Producer",
     buyer: "BelSea Export",
+    buyerCountry: "Belize",
     members: 200,
     capacity: 180,
     capacityUnit: "tons",
@@ -120,6 +131,7 @@ export const COOPS: Cooperative[] = [
     sector: "Aquaculture",
     valueChain: "Exporter",
     buyer: "MarSea Intl",
+    buyerCountry: "Belize",
     members: 95,
     capacity: 85,
     capacityUnit: "tons",
@@ -140,6 +152,7 @@ export const COOPS: Cooperative[] = [
     sector: "Eco-tourism",
     valueChain: "Producer",
     buyer: "Green Journeys",
+    buyerCountry: "Belize",
     members: 30,
     capacity: 6000,
     capacityUnit: "units",
@@ -161,7 +174,8 @@ export const COOPS: Cooperative[] = [
     gps: "16.80,-88.30",
     sector: "Seaweed",
     valueChain: "Processor",
-    buyer: "BlueWave Capital", // USA buyer
+    buyer: "BlueWave Capital",
+    buyerCountry: "United States",
     members: 70,
     capacity: 25,
     capacityUnit: "tons",
@@ -181,7 +195,8 @@ export const COOPS: Cooperative[] = [
     gps: "17.52,-88.30",
     sector: "Eco-tourism",
     valueChain: "Exporter",
-    buyer: "CaribEco Partners", // Jamaica buyer
+    buyer: "CaribEco Partners",
+    buyerCountry: "Jamaica",
     members: 40,
     capacity: 9000,
     capacityUnit: "units",
@@ -201,11 +216,11 @@ export type CoopFilters = {
   valueChain?: Cooperative["valueChain"];
   district?: string;
   buyer?: string;
+  buyerCountry?: string; // NEW
   certification?: string;
   fdiPriority?: string;
   esg?: string;
   exportHistory?: "Local" | "Regional" | "International";
-   buyerCountry?: string; //
   minMembers: number;
   maxMembers: number;
   minCapacity: number;
@@ -225,22 +240,32 @@ export function filterCoops(list: Cooperative[], f: CoopFilters): Cooperative[] 
     if (f.q) {
       const q = f.q.toLowerCase();
       const txt = [
-        c.cooperativeName, c.officialName, c.sector, c.valueChain, c.district, c.buyer, c.product,
-        c.fdiPriority, c.contact, c.partners.join(" "), c.certifications.join(" ")
-      ].join(" ").toLowerCase();
+        c.cooperativeName,
+        c.officialName,
+        c.sector,
+        c.valueChain,
+        c.district,
+        c.buyer,
+        c.product,
+        c.fdiPriority,
+        c.contact,
+        c.partners.join(" "),
+        c.certifications.join(" "),
+        c.buyerCountry ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
       if (!txt.includes(q)) return false;
     }
     if (f.sector && c.sector !== f.sector) return false;
     if (f.valueChain && c.valueChain !== f.valueChain) return false;
     if (f.district && c.district !== f.district) return false;
     if (f.buyer && c.buyer !== f.buyer) return false;
+    if (f.buyerCountry && (c.buyerCountry ?? "") !== f.buyerCountry) return false;
     if (f.certification && !c.certifications.includes(f.certification)) return false;
     if (f.fdiPriority && c.fdiPriority !== f.fdiPriority) return false;
     if (f.esg && !c.esg.includes(f.esg)) return false;
     if (f.exportHistory && !c.exportHistory.includes(f.exportHistory)) return false;
-  
-    if (f.buyerCountry && (c as any).buyerCountry !== f.buyerCountry) return false;
-    
     if (c.members < f.minMembers || c.members > f.maxMembers) return false;
     if (c.capacity < f.minCapacity || c.capacity > f.maxCapacity) return false;
     return true;
@@ -249,16 +274,46 @@ export function filterCoops(list: Cooperative[], f: CoopFilters): Cooperative[] 
 
 export function exportCSV(rows: Cooperative[]) {
   const header = [
-    "Cooperative Name","Official Name","District","GPS","Sector","Value Chain","Linked Buyer",
-    "Membership Size","Production Capacity","Capacity Unit","Product Focus","Certifications",
-    "Export History","FDI Priority","ESG/SDG","Partners","Contact",
+    "Cooperative Name",
+    "Official Name",
+    "District",
+    "GPS",
+    "Sector",
+    "Value Chain",
+    "Linked Buyer",
+    "Buyer Country",
+    "Membership Size",
+    "Production Capacity",
+    "Capacity Unit",
+    "Product Focus",
+    "Certifications",
+    "Export History",
+    "FDI Priority",
+    "ESG/SDG",
+    "Partners",
+    "Contact",
   ];
   const lines = [header.join(",")].concat(
     rows.map((r) =>
       [
-        r.cooperativeName, r.officialName, r.district, r.gps, r.sector, r.valueChain, r.buyer, r.members,
-        r.capacity, r.capacityUnit, r.product, r.certifications.join("|"), r.exportHistory.join("|"),
-        r.fdiPriority, r.esg.join("|"), r.partners.join("|"), r.contact,
+        r.cooperativeName,
+        r.officialName,
+        r.district,
+        r.gps,
+        r.sector,
+        r.valueChain,
+        r.buyer,
+        r.buyerCountry ?? "",
+        r.members,
+        r.capacity,
+        r.capacityUnit,
+        r.product,
+        r.certifications.join("|"),
+        r.exportHistory.join("|"),
+        r.fdiPriority,
+        r.esg.join("|"),
+        r.partners.join("|"),
+        r.contact,
       ].join(",")
     )
   );
@@ -270,3 +325,9 @@ export function exportCSV(rows: Cooperative[]) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+// Optional: derived buyers list for graphs (name → country)
+export const BUYERS = Array.from(
+  COOPS.reduce((m, c) => m.set(c.buyer, c.buyerCountry ?? "Belize"), new Map<string, string>()),
+  ([name, country]) => ({ name, country })
+);
