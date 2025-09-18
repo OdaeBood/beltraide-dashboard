@@ -49,7 +49,7 @@ function buildGraph(coops: Cooperative[]) {
   return { nodes, links };
 }
 
-export default function EcosystemGraph({
+export default function NetworkGraph({
   coops,
   onCoopSelect,
   onSectorSelect,
