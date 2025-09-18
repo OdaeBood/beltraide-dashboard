@@ -1,7 +1,7 @@
 // src/components/EcosystemGraph.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D, { ForceGraphMethods } from "react-force-graph-2d";
-import { Card, CardContent, CardHeader, CardTitle, Button } from "./lib/ui";
+import { Card, CardContent, CardHeader, CardTitle, Button } from "../lib/ui";
 import type { Cooperative } from "../data/coops";
 
 /**
@@ -32,7 +32,7 @@ type Node = {
 type Link = { source: string; target: string };
 
 function buildGraph(coops: Cooperative[]) {
-  // sectors / FDI / districts from the coop data
+  // sectors / FDI / districts
   const hubsSector: Node[] = Array.from(new Set(coops.map((d) => d.sector))).map((s) => ({
     id: `Sector: ${s}`,
     type: "hub-sector",
@@ -51,7 +51,7 @@ function buildGraph(coops: Cooperative[]) {
     color: LUNA.orange,
   }));
 
-  // Optional buyer *country* hubs if your data has buyerCountry (string)
+  // buyer *country* hubs if present
   const buyerCountries = Array.from(
     new Set(
       coops
@@ -62,7 +62,7 @@ function buildGraph(coops: Cooperative[]) {
   const hubsLocation: Node[] = buyerCountries.map((cty) => ({
     id: `Location: ${cty}`,
     type: "hub-location",
-    color: "#7DD3FC", // light teal to distinguish
+    color: "#7DD3FC", // location = teal
   }));
 
   const coopNodes: Node[] = coops.map((c) => ({
@@ -79,9 +79,7 @@ function buildGraph(coops: Cooperative[]) {
     links.push({ source: c.id, target: `Sector: ${c.sector}` });
     links.push({ source: c.id, target: `FDI: ${c.fdiPriority}` });
     links.push({ source: c.id, target: `District: ${c.district}` });
-    if (c.buyerCountry) {
-      links.push({ source: c.id, target: `Location: ${c.buyerCountry}` });
-    }
+    if (c.buyerCountry) links.push({ source: c.id, target: `Location: ${c.buyerCountry}` });
   });
 
   return { nodes, links };
@@ -123,17 +121,15 @@ export default function EcosystemGraph({
     return () => clearTimeout(t);
   }, [coops.length]);
 
-  // Loosen spacing a bit (no direct d3-force import needed)
+  // Loosen spacing (no direct d3-force imports)
   useEffect(() => {
     const g = fgRef.current as any;
     if (!g) return;
     try {
       g.d3VelocityDecay?.(0.2);
       g.cooldownTicks?.(120);
-      // Charge/repulsion (negative = push apart)
       const charge = g.d3Force?.("charge");
       if (charge && charge.strength) charge.strength(-140);
-      // Link distance (roomier)
       const linkForce = g.d3Force?.("link");
       if (linkForce && linkForce.distance) linkForce.distance(70);
     } catch {}
@@ -220,7 +216,7 @@ export default function EcosystemGraph({
     drawLabel(node, ctx, globalScale, isHover);
   };
 
-  // Make labels clickable by painting a pointer area covering the label text
+  // Clickable labels
   const nodePointerAreaPaint = (node: any, color: string, ctx: CanvasRenderingContext2D) => {
     const isHub = node.type?.startsWith("hub");
     const r = isHub ? 9 : 5;
@@ -264,7 +260,6 @@ export default function EcosystemGraph({
             linkWidth={() => linkWidth}
             cooldownTicks={120}
             onNodeHover={(n: any) => setHoverNodeId(n?.id ?? null)}
-            // clicking nodes → filters or details + snapshot
             onNodeClick={(n: any) => {
               if (!n) return;
               const t = n.type as Node["type"];
