@@ -60,9 +60,10 @@ export default function App() {
         </div>
       </div>
 
-      {/* Filters + List */}
+      {/* ROW 1: Filters • Graph • Snapshot */}
       <div className="grid grid-cols-12 gap-6 mb-6">
-        <div className="col-span-12 md:col-span-4">
+        {/* Filters (left) */}
+        <div className="col-span-12 lg:col-span-3">
           <Card>
             <CardHeader>
               <CardTitle>Filters</CardTitle>
@@ -80,21 +81,8 @@ export default function App() {
           </Card>
         </div>
 
-        <div className="col-span-12 md:col-span-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Cooperatives ({filtered.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CoopTable data={filtered} onSelect={setSelectedId} />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Ecosystem graph + Snapshot */}
-      <div className="grid grid-cols-12 gap-6 mb-6">
-        <div className="col-span-12 lg:col-span-8">
+        {/* Ecosystem Graph (center) */}
+        <div className="col-span-12 lg:col-span-6">
           <EcosystemGraph
             coops={filtered}
             onCoopSelect={handleCoopSelect}
@@ -104,8 +92,9 @@ export default function App() {
           />
         </div>
 
-        <div className="col-span-12 lg:col-span-4">
-          <div className="sticky top-6 space-y-6">
+        {/* Snapshot (right) */}
+        <div className="col-span-12 lg:col-span-3">
+          <div className="sticky top-6">
             <Card>
               <CardHeader>
                 <CardTitle>Snapshot</CardTitle>
@@ -158,7 +147,19 @@ export default function App() {
         </div>
       </div>
 
-      {/* Charts */}
+      {/* ROW 2: Cooperatives table (full width) */}
+      <div className="mb-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Cooperatives ({filtered.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CoopTable data={filtered} onSelect={setSelectedId} />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ROW 3: Charts (full width) */}
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-12">
           <ChartsPanel coops={filtered} />
