@@ -15,27 +15,29 @@ import {
   defaultCoopFilters,
   type CoopFilters,
   exportCSV,
+  BLUE_SECTORS,
 } from "./data/coops";
 
 export default function App() {
+  // Scope the entire app to Blue Economy (no cacao/honey globally)
+  const BASE: Cooperative[] = useMemo(
+    () => COOPS.filter(c => BLUE_SECTORS.includes(c.sector)),
+    []
+  );
+
   // filters and selection
   const [filters, setFilters] = useState<CoopFilters>(defaultCoopFilters());
   const [selectedId, setSelectedId] = useState<string | undefined>();
-  const [showSnapshot, setShowSnapshot] = useState<boolean>(false);
 
-  // derived data
+  // derived data (from BASE only)
   const buyers = useMemo(
-    () => Array.from(new Set(COOPS.map((c) => c.buyer))).sort(),
-    []
+    () => Array.from(new Set(BASE.map((c) => c.buyer))).sort(),
+    [BASE]
   );
-  const filtered = useMemo(() => filterCoops(COOPS, filters), [filters]);
+  const filtered = useMemo(() => filterCoops(BASE, filters), [BASE, filters]);
   const selected = useMemo(
-    () => COOPS.find((c) => c.id === selectedId),
-    [selectedId]
-  );
-  const buyerCount = useMemo(
-    () => new Set(filtered.map((c) => c.buyer)).size,
-    [filtered]
+    () => BASE.find((c) => c.id === selectedId),
+    [BASE, selectedId]
   );
 
   // graph → table/details interactions
@@ -43,12 +45,28 @@ export default function App() {
 
   const handleSectorFromGraph = (sector: string) => {
     setFilters((f) => ({ ...f, sector }));
-    setShowSnapshot(true);
+    // keep details closed when focusing by sector
+    setSelectedId(undefined);
   };
   const handleFdiFromGraph = (priority: string) => {
     setFilters((f) => ({ ...f, fdiPriority: priority }));
-    setShowSnapshot(true);
+    // keep details closed when focusing by FDI
+    setSelectedId(undefined);
   };
+
+  // counts for Snapshot (from filtered)
+  const totalMembers = useMemo(
+    () => filtered.reduce((a, c) => a + c.members, 0),
+    [filtered]
+  );
+  const totalCapacity = useMemo(
+    () => filtered.reduce((a, c) => a + c.capacity, 0),
+    [filtered]
+  );
+  const uniqueBuyersCount = useMemo(
+    () => new Set(filtered.map(c => c.buyer)).size,
+    [filtered]
+  );
 
   return (
     <main className="min-h-screen p-6">
@@ -67,7 +85,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Filters + List */}
+      {/* Row 1: Filters + Table */}
       <div className="grid grid-cols-12 gap-6 mb-6">
         <div className="col-span-12 md:col-span-4">
           <Card>
@@ -79,7 +97,8 @@ export default function App() {
                 filters={filters}
                 setFilters={(f) => {
                   setFilters(f);
-                  if (!f.sector && !f.fdiPriority) setShowSnapshot(false);
+                  // Clear selection when filters change to avoid stale details
+                  setSelectedId(undefined);
                 }}
                 allBuyers={buyers}
               />
@@ -99,7 +118,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Ecosystem graph + Snapshot + Metrics */}
+      {/* Row 2: Graph (left) + Snapshot (right) — back to the placement you liked */}
       <div className="grid grid-cols-12 gap-6 mb-6">
         <div className="col-span-12 lg:col-span-8">
           <EcosystemGraph
@@ -118,32 +137,18 @@ export default function App() {
                 <CardTitle>Snapshot</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-zinc-300 space-y-1">
-                <div>
-                  Total co-ops: <b>{filtered.length}</b>
-                </div>
-                <div>
-                  Total members:{" "}
-                  <b>{filtered.reduce((a, c) => a + c.members, 0)}</b>
-                </div>
-                <div>
-                  Total capacity:{" "}
-                  <b>{filtered.reduce((a, c) => a + c.capacity, 0)}</b>
-                </div>
-                <div>
-                  Unique buyers: <b>{buyerCount}</b>
-                </div>
+                <div> Total co-ops: <b>{filtered.length}</b></div>
+                <div> Total members: <b>{totalMembers}</b></div>
+                <div> Total capacity: <b>{totalCapacity}</b></div>
+                <div> # of Buyers: <b>{uniqueBuyersCount}</b></div>
 
                 {(filters.sector || filters.fdiPriority) && (
                   <div className="pt-2 space-y-1">
                     {filters.sector && (
-                      <div>
-                        Focus — Sector: <b>{filters.sector}</b>
-                      </div>
+                      <div> Focus — Sector: <b>{filters.sector}</b></div>
                     )}
                     {filters.fdiPriority && (
-                      <div>
-                        Focus — FDI Priority: <b>{filters.fdiPriority}</b>
-                      </div>
+                      <div> Focus — FDI Priority: <b>{filters.fdiPriority}</b></div>
                     )}
                     <div className="pt-1">
                       <Button
@@ -154,7 +159,6 @@ export default function App() {
                             sector: undefined,
                             fdiPriority: undefined,
                           }));
-                          setShowSnapshot(false);
                         }}
                       >
                         Clear focus
@@ -168,7 +172,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Charts */}
+      {/* Row 3: Charts */}
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-12">
           <ChartsPanel coops={filtered} />
