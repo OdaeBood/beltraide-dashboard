@@ -18,12 +18,10 @@ import {
 } from "./data/coops";
 
 export default function App() {
-  // filters and selection
   const [filters, setFilters] = useState<CoopFilters>(defaultCoopFilters());
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [showSnapshot, setShowSnapshot] = useState<boolean>(false);
 
-  // derived data
   const buyersAll = useMemo(
     () => Array.from(new Set(COOPS.map((c) => c.buyer))).sort(),
     []
@@ -38,9 +36,9 @@ export default function App() {
     [filtered]
   );
 
-  // graph → table/details interactions
-  const handleCoopSelect = (id: string) => setSelectedId(id);
+  const hasFocus = !!(filters.sector || filters.fdiPriority || filters.buyer);
 
+  const handleCoopSelect = (id: string) => setSelectedId(id);
   const handleSectorFromGraph = (sector: string) => {
     setFilters((f) => ({ ...f, sector, fdiPriority: f.fdiPriority }));
     setShowSnapshot(true);
@@ -55,6 +53,10 @@ export default function App() {
     setFilters((f) => ({ ...f, buyer }));
     setShowSnapshot(true);
     setSelectedId(undefined);
+  };
+  const clearFocus = () => {
+    setFilters((f) => ({ ...f, sector: undefined, fdiPriority: undefined, buyer: undefined }));
+    setShowSnapshot(false);
   };
 
   return (
@@ -102,6 +104,8 @@ export default function App() {
             onSectorSelect={handleSectorFromGraph}
             onFdiSelect={handleFdiFromGraph}
             onBuyerSelect={handleBuyerFromGraph}
+            showReset={hasFocus}
+            onClearFocus={clearFocus}
             title="Ecosystem Graph"
           />
         </div>
@@ -131,18 +135,7 @@ export default function App() {
                       <div> Focus — Buyer: <b>{filters.buyer}</b> </div>
                     )}
                     <div className="pt-1">
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          setFilters((f) => ({
-                            ...f,
-                            sector: undefined,
-                            fdiPriority: undefined,
-                            buyer: undefined,
-                          }));
-                          setShowSnapshot(false);
-                        }}
-                      >
+                      <Button variant="ghost" onClick={clearFocus}>
                         Clear focus
                       </Button>
                     </div>
@@ -176,10 +169,7 @@ export default function App() {
       </div>
 
       {/* Details drawer */}
-      <CoopDetails
-        coop={selected}
-        onClose={() => setSelectedId(undefined)}
-      />
+      <CoopDetails coop={selected} onClose={() => setSelectedId(undefined)} />
     </main>
   );
 }
